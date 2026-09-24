@@ -3,13 +3,15 @@
  * Appended to the main-app chunk (NOT inlined in index.html) so the Next.js
  * React hydration never sees unexpected DOM in the initial HTML. The card is
  * built with plain DOM APIs after the page settles, then data is fetched from
- * the same-origin /api/shorts endpoint. A MutationObserver re-inserts the card
- * if hydration ever drops it. Safe no-op on pages without portal cards. */
+ * the same-origin /api/shorts endpoint. Delayed one-shot re-inserts cover the
+ * case where React's hydration recovery wipes the card. There is deliberately
+ * NO MutationObserver: re-inserting nodes while React is hydrating corrupts
+ * its DOM bookkeeping and throws into the app's error boundary. Safe no-op on
+ * pages without portal cards. */
 ;(function () {
   "use strict";
   var API_URL = "/api/shorts";
   var CARD_ID = "xandra-yt-shorts-card";
-  var OBSERVE_MS = 60000;
 
   function esc(s) {
     return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
@@ -96,16 +98,11 @@
   function boot() {
     if (!findAnchor()) return; /* not a page with portal cards */
     insertCard();
-    try {
-      if (window.MutationObserver) {
-        var obs = new MutationObserver(function () {
-          if (!document.getElementById(CARD_ID)) insertCard();
-        });
-        obs.observe(document.body, { childList: true, subtree: true });
-        setTimeout(function () { obs.disconnect(); }, OBSERVE_MS);
-      }
-    } catch (e) {}
-    /* Re-assert after hydration typically settles, in case the observer missed a swap. */
+    /* Re-assert after hydration typically settles. Deliberately no
+     * MutationObserver here: re-inserting DOM nodes while React is
+     * hydrating or recovering from a mismatch corrupts its DOM bookkeeping
+     * and throws into the app's error boundary. One-shot delayed retries
+     * are safe because they run outside React's commit phase. */
     setTimeout(insertCard, 2500);
     setTimeout(insertCard, 8000);
     fetch(API_URL, { headers: { Accept: "application/json" } })
