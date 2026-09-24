@@ -10,6 +10,25 @@
  * pages without portal cards. */
 ;(function () {
   "use strict";
+  /* TEMPORARY DEBUG: capture the React error boundary's caught error and show it. */
+  try {
+    var __origErr = console.error;
+    console.error = function () {
+      try {
+        for (var i = 0; i < arguments.length; i++) {
+          var a = arguments[i];
+          if (a && a instanceof Error) {
+            var d = document.createElement("div");
+            d.id = "xandra-debug-error";
+            d.setAttribute("style", "position:fixed;left:8px;right:8px;bottom:8px;z-index:99999;background:#111;color:#f66;font:12px/1.4 monospace;white-space:pre-wrap;padding:12px;border:2px solid red;max-height:40vh;overflow:auto");
+            d.textContent = "CAUGHT: " + a.message + "\n" + (a.stack || "");
+            document.documentElement.appendChild(d);
+          }
+        }
+      } catch (e) {}
+      return __origErr.apply(console, arguments);
+    };
+  } catch (e) {}
   var API_URL = "/api/shorts";
   var CARD_ID = "xandra-yt-shorts-card";
 
