@@ -11,6 +11,7 @@
 ;
 ;
 ;
+;
 ;/* Xandra bespoke layer: brand weave, micro-interactions, easter eggs, voice, Oscar, cosmos */
 (function(){
 "use strict";
@@ -29,6 +30,7 @@ background:
 /* Twinkling constellation stars */
 @keyframes xa-twinkle{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.55;transform:scale(.82)}}
 .xa-twinkle{animation:xa-twinkle 3s ease-in-out infinite;transform-origin:center;transform-box:fill-box}
+.xa-constellation{transition:filter 2s ease}
 /* Semi-colon section divider */
 .xa-semicolon{display:flex;align-items:center;gap:10px;margin:18px auto;max-width:420px;opacity:.4}
 .xa-semicolon::before,.xa-semicolon::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(168,85,247,.22),transparent)}
@@ -206,6 +208,25 @@ function addOscar(){
     b.style.transform = "scale(1.15)";
     setTimeout(function(){ b.style.transform = ""; }, 200);
   });
+}
+
+/* ---------- 6b. Time-of-day constellation colors ---------- */
+function timeOfDay(){
+  var svg = document.querySelector('svg[aria-label="Dopamine molecule drawn as a constellation"]');
+  if (!svg) return;
+  svg.classList.add("xa-constellation");
+  var h = new Date().getHours();
+  var f = "";
+  if (h >= 5 && h < 8) {
+    f = "hue-rotate(-35deg) saturate(1.15)";       // dawn: warm gold-pink
+  } else if (h >= 8 && h < 17) {
+    f = "";                                        // day: default palette
+  } else if (h >= 17 && h < 21) {
+    f = "hue-rotate(35deg) saturate(1.25)";        // dusk: deep magenta-violet
+  } else {
+    f = "hue-rotate(85deg) brightness(1.08) saturate(1.1)"; // night: cool cyan-blue
+  }
+  if (svg.style.filter !== f) svg.style.filter = f;
 }
 
 /* ---------- 7. Twinkle the constellation stars ---------- */
@@ -393,6 +414,7 @@ function watchVoice(){
 function run(){
   var ob = document.getElementById('xa-oscar'); if (ob) ob.remove();
   voicePass();
+  timeOfDay();
   if (!window.__xaWatched) { window.__xaWatched = 1; watchVoice(); }
   addDividers();
   addSignature();
@@ -406,5 +428,6 @@ var timer = setInterval(function(){
   run();
   if (++attempts > 24) clearInterval(timer);
 }, 500);
+setInterval(timeOfDay, 30 * 60 * 1000);
 run();
 })();
