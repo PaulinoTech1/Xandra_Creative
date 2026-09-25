@@ -8,6 +8,7 @@
 ;
 ;
 ;
+;
 ;/* Xandra bespoke layer: brand weave, micro-interactions, easter eggs, voice, Oscar, cosmos */
 (function(){
 "use strict";
@@ -27,9 +28,9 @@ background:
 @keyframes xa-twinkle{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.55;transform:scale(.82)}}
 .xa-twinkle{animation:xa-twinkle 3s ease-in-out infinite;transform-origin:center;transform-box:fill-box}
 /* Semi-colon section divider */
-.xa-semicolon{display:flex;align-items:center;gap:12px;margin:28px auto;max-width:640px;opacity:.7}
-.xa-semicolon::before,.xa-semicolon::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(168,85,247,.4),transparent)}
-.xa-semicolon span{font-size:22px;color:#c084fc;font-weight:700;letter-spacing:2px}
+.xa-semicolon{display:flex;align-items:center;gap:10px;margin:18px auto;max-width:420px;opacity:.4}
+.xa-semicolon::before,.xa-semicolon::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(168,85,247,.22),transparent)}
+.xa-semicolon span{font-size:13px;color:#a78bfa;font-weight:400;letter-spacing:1px}
 /* Connected Dimensions hover: each row gets a lift + glow */
 .xa-dim-row{transition:transform .25s ease, background .25s ease !important}
 .xa-dim-row:hover{transform:translateX(6px) scale(1.02);background:rgba(147,112,219,.12) !important;border-radius:8px}
@@ -132,6 +133,9 @@ function addDividers(){
   // Insert dividers between sections (not before the first)
   sections.forEach(function(sec, i){
     if (i === 0) return;
+    // Skip merch/popup areas: no divider near "Snag the goods" or merch triggers
+    var txt = (sec.textContent || "").toLowerCase();
+    if (/snag the goods|merch|etsy shop/.test(txt)) return;
     if (sec.previousElementSibling && sec.previousElementSibling.classList &&
         sec.previousElementSibling.classList.contains("xa-semicolon")) return;
     var d = document.createElement("div");
