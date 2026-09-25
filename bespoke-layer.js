@@ -245,6 +245,43 @@ function molEgg(){
   });
 }
 
+
+/* ---------- 12. Fix broken TikTok/Instagram portals ---------- */
+function fixPortals(){
+  // TikTok: countik iframe is blocked by X-Frame-Options. Replace with profile card.
+  var tiktokIframes = document.querySelectorAll('iframe[src*="countik.com"]');
+  tiktokIframes.forEach(function(f){
+    var wrap = f.closest("div[class*='rounded']") || f.parentNode;
+    if (!wrap || wrap.dataset.fixed) return;
+    wrap.dataset.fixed = "1";
+    wrap.innerHTML = '<a href="https://www.tiktok.com/@xandrathecreative" target="_blank" rel="noopener" ' +
+      'style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:40px 20px;text-align:center;text-decoration:none">' +
+      '<span style="font-size:48px">\uD83C\uDFB5</span>' +
+      '<span style="color:#fff;font-weight:700;font-size:16px">Catch me on TikTok</span>' +
+      '<span style="color:#a78bfa;font-size:13px">Short-form chaos, fresh daily.<br>Tap in \u2192 @xandrathecreative</span>' +
+      '<span style="margin-top:8px;padding:10px 28px;border-radius:999px;font-size:14px;font-weight:600;color:#fff;' +
+      'background:linear-gradient(90deg,#ec4899,#8b5cf6,#06b6d4)">Visit TikTok</span></a>';
+  });
+  // Instagram: stub renders nothing. Replace empty portal body with profile card.
+  var instaHead = document.evaluate("//h3[contains(text(),'Instagram Portal')]",
+    document, null, 9, null).singleNodeValue;
+  if (instaHead && !instaHead.dataset.fixed) {
+    instaHead.dataset.fixed = "1";
+    // Find the content container (sibling after the header block)
+    var headerBlock = instaHead.closest("div");
+    var contentDiv = headerBlock ? headerBlock.nextElementSibling : null;
+    if (contentDiv && contentDiv.textContent.trim().length < 50) {
+      contentDiv.innerHTML = '<a href="https://www.instagram.com/xandrathecreative" target="_blank" rel="noopener" ' +
+        'style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:40px 20px;text-align:center;text-decoration:none">' +
+        '<span style="font-size:48px">\uD83D\uDCF8</span>' +
+        '<span style="color:#fff;font-weight:700;font-size:16px">Visual magic on Instagram</span>' +
+        '<span style="color:#a78bfa;font-size:13px">Behind-the-scenes, process vids,<br>finished pieces \u2192 @xandrathecreative</span>' +
+        '<span style="margin-top:8px;padding:10px 28px;border-radius:999px;font-size:14px;font-weight:600;color:#fff;' +
+        'background:linear-gradient(90deg,#ec4899,#8b5cf6,#06b6d4)">Visit Instagram</span></a>';
+    }
+  }
+}
+
 /* ---------- Run everything (with retries for hydration) ---------- */
 function run(){
   voicePass();
@@ -254,6 +291,7 @@ function run(){
   twinkle();
   dimHovers();
   molEgg();
+  fixPortals();
 }
 var attempts = 0;
 var timer = setInterval(function(){
