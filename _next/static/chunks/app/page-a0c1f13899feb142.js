@@ -5,6 +5,7 @@
 ;
 ;
 ;
+;
 ;/* Xandra bespoke layer: brand weave, micro-interactions, easter eggs, voice, Oscar, cosmos */
 (function(){
 "use strict";
@@ -154,13 +155,35 @@ function addSignature(){
 }
 
 /* ---------- 6. Oscar: Studio Supervisor badge ---------- */
+var xaQuips = [
+  "Quality control. Nap schedule strictly enforced.",
+  "Approved this section. Smelled it first.",
+  "Supervising. Do not disturb.",
+  "Treats accepted as payment for approval.",
+  "I saw you scroll past. Rude."
+];
+var xaQuipIdx = 0;
 function addOscar(){
   if (document.getElementById("xa-oscar")) return;
   var b = document.createElement("div");
   b.id = "xa-oscar";
-  b.title = "Quality control. Nap schedule strictly enforced.";
+  b.title = xaQuips[0];
   b.innerHTML = '<span class="xa-paw">\u{1F43E}</span><span>Oscar &middot; Studio Supervisor</span>';
   document.body.appendChild(b);
+  // Rotate quips every 30 seconds
+  setInterval(function(){
+    xaQuipIdx = (xaQuipIdx + 1) % xaQuips.length;
+    b.title = xaQuips[xaQuipIdx];
+  }, 30000);
+  // Cycle on click too
+  b.style.cursor = "pointer";
+  b.addEventListener("click", function(){
+    xaQuipIdx = (xaQuipIdx + 1) % xaQuips.length;
+    b.title = xaQuips[xaQuipIdx];
+    // Brief bounce
+    b.style.transform = "scale(1.15)";
+    setTimeout(function(){ b.style.transform = ""; }, 200);
+  });
 }
 
 /* ---------- 7. Twinkle the constellation stars ---------- */
