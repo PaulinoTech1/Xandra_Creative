@@ -28,7 +28,7 @@
     var cards = document.querySelectorAll(".cosmic-card");
     for (var i = 0; i < cards.length; i++) {
       if (cards[i].id === CARD_ID) continue;
-      if (cards[i].textContent.indexOf("Instagram Portal") !== -1) return cards[i];
+      if (cards[i].textContent.indexOf("TikTok Portal") !== -1) return cards[i];
     }
     return null;
   }
@@ -58,7 +58,7 @@
     var anchor = findAnchor();
     if (!anchor || !anchor.parentNode) return null;
     var card = buildCard();
-    anchor.parentNode.insertBefore(card, anchor.nextSibling);
+    anchor.parentNode.insertBefore(card, anchor);
     return card;
   }
 
