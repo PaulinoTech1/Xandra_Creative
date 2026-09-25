@@ -4,6 +4,7 @@
 ;
 ;
 ;
+;
 ;/* Xandra bespoke layer: brand weave, micro-interactions, easter eggs, voice, Oscar, cosmos */
 (function(){
 "use strict";
@@ -263,55 +264,55 @@ function portalCard(url, emoji, title, desc, btn){
     'background:linear-gradient(90deg,#ec4899,#8b5cf6,#06b6d4)">' + btn + '</span></a>';
 }
 function fixPortals(){
-  // Find portal sections by heading text, replace empty/blocked content with cards.
+  // Hide blocked countik iframes
+  document.querySelectorAll('iframe[src*="countik.com"]').forEach(function(f){
+    var w = f.closest("div") || f.parentNode;
+    if (w) w.style.display = "none";
+  });
   var portals = [
-    {match: "TikTok", url: "https://www.tiktok.com/@xandrathecreative",
+    {match: "tiktok", url: "https://www.tiktok.com/@xandrathecreative",
      emoji: "\uD83C\uDFB5", title: "Catch me on TikTok",
      desc: "Short-form chaos, fresh daily.<br>Tap in \u2192 @xandrathecreative", btn: "Visit TikTok"},
-    {match: "Instagram", url: "https://www.instagram.com/xandrathecreative",
+    {match: "instagram", url: "https://www.instagram.com/xandrathecreative",
      emoji: "\uD83D\uDCF8", title: "Visual magic on Instagram",
      desc: "Behind-the-scenes, process vids,<br>finished pieces \u2192 @xandrathecreative", btn: "Visit Instagram"}
   ];
-  // Also kill blocked countik iframes wherever they are
-  document.querySelectorAll('iframe[src*="countik.com"]').forEach(function(f){
-    var w = f.closest("div[class*=rounded]") || f.parentNode;
-    if (w) w.style.display = "none";
-  });
+  // Tag-agnostic: find text nodes containing the portal name
+  var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  var textNodes = [];
+  while (walker.nextNode()) textNodes.push(walker.currentNode);
   portals.forEach(function(p){
-    var heads = document.evaluate(
-      "//h3[contains(text(),'" + p.match + "') or contains(text(),'" + p.match.toLowerCase() + "')]",
-      document, null, 7, null);
-    var h;
-    while ((h = heads.iterateNext())) {
-      if (h.dataset.xaFixed) continue;
-      // Walk up to find the card container, then find/create the body area
-      var card = h;
-      for (var k = 0; k < 6; k++) {
+    textNodes.forEach(function(tn){
+      var txt = (tn.nodeValue || "").toLowerCase();
+      // Match "tiktok portal" or "instagram portal" but not nav links
+      if (txt.indexOf(p.match + " portal") === -1) return;
+      var el = tn.parentNode;
+      // Skip if this is inside a nav/sidebar link
+      var anc = el;
+      for (var k = 0; k < 4; k++) {
+        anc = anc.parentNode;
+        if (!anc) break;
+        var ac = (anc.className || "").toString().toLowerCase();
+        if (/nav|sidebar|menu/.test(ac)) return;
+      }
+      if (el.dataset && el.dataset.xaFixed) return;
+      // Walk up to find the section card
+      var card = el;
+      for (var j = 0; j < 8; j++) {
         card = card.parentNode;
-        if (!card || card === document.body) break;
-        var cls = (card.className || "").toString();
-        if (/cosmic-card|rounded/.test(cls)) break;
+        if (!card || card === document.body) return;
+        var cc = (card.className || "").toString();
+        if (/cosmic-card/.test(cc)) break;
       }
-      if (!card || card === document.body) continue;
-      // The body is typically the last child div after the header
-      var kids = card.children;
-      var body = null;
-      for (var j = kids.length - 1; j >= 0; j--) {
-        var t = kids[j].textContent.trim();
-        if (t.length < 120 && kids[j].querySelector("h3") === null) { body = kids[j]; break; }
-      }
-      if (!body) {
-        body = document.createElement("div");
-        body.style.cssText = "border:1px solid rgba(168,85,247,.3);border-radius:8px;overflow:hidden;margin:0 16px 16px";
-        card.appendChild(body);
-      }
-      // Only replace if empty or contains blocked iframe
-      var hasBlocked = body.querySelector('iframe[src*="countik.com"]');
-      if (body.textContent.trim().length < 120 || hasBlocked) {
-        h.dataset.xaFixed = "1";
-        body.innerHTML = portalCard(p.url, p.emoji, p.title, p.desc, p.btn);
-      }
-    }
+      if (!card || card === document.body) return;
+      if (card.dataset.xaFixed) return;
+      card.dataset.xaFixed = "1";
+      // Create body div with the card
+      var body = document.createElement("div");
+      body.style.cssText = "border:1px solid rgba(168,85,247,.3);border-radius:8px;overflow:hidden;margin:12px 16px 16px";
+      body.innerHTML = portalCard(p.url, p.emoji, p.title, p.desc, p.btn);
+      card.appendChild(body);
+    });
   });
 }
 
