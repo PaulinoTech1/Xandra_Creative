@@ -1,0 +1,1033 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Cafe Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <style>
+        :root {
+            --primary-bg: #0d0c1d;
+            --secondary-bg: #1d1b34;
+            --border-color: #4f4a7e;
+            --text-color: #f0f0f0;
+            --glow-color: #ff00ff;
+            --success-color: #00ff9f;
+            --warning-color: #f7d51d;
+            --error-color: #ef4444;
+            --prestige-color: #a855f7;
+        }
+        body {
+            font-family: 'Press Start 2P', cursive;
+            background-color: var(--primary-bg);
+            color: var(--text-color);
+            overflow: hidden;
+            text-shadow: 1px 1px 2px #000;
+        }
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 300px; /* Changed for LTR layout */
+            grid-template-rows: auto 1fr;
+            grid-template-areas:
+                "header header"
+                "main upgrades"; /* Changed for LTR layout */
+            gap: 1rem;
+            height: 100vh;
+            padding: 1rem;
+        }
+        .panel {
+            background-color: var(--secondary-bg);
+            border: 2px solid var(--border-color);
+            box-shadow: 0 0 15px rgba(79, 74, 126, 0.5);
+            border-radius: 8px;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+        }
+        #resource-bar { grid-area: header; }
+        #upgrades-panel { grid-area: upgrades; overflow-y: auto; }
+        #main-view-panel { grid-area: main; overflow: hidden; }
+
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--primary-bg); }
+        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--glow-color); }
+
+        /* Sub-tabs in panel */
+        .panel-sub-tabs { display: flex; justify-content: space-around; margin-bottom: 1rem; border-bottom: 2px solid var(--border-color); padding-bottom: 0.5rem; }
+        .sub-tab-btn { background: none; border: none; color: var(--text-color); opacity: 0.6; cursor: pointer; transition: all 0.2s; padding: 5px; font-size: 0.7rem;}
+        .sub-tab-btn.active { opacity: 1; color: var(--glow-color); text-shadow: 0 0 5px var(--glow-color); border-bottom: 2px solid var(--glow-color); }
+        .panel-content { display: none; }
+        .panel-content.active { display: block; }
+        
+        /* Cafe View */
+        #cafe-view { height: 100%; width: 100%; background: radial-gradient(ellipse at bottom, #2c2a4a, #0d0c1d); position: relative; }
+        #station-interior { position: absolute; bottom: 0; left: 0; right: 0; height: 60%; background: linear-gradient(to top, #3d2a4c, transparent); }
+        #workstation-area { position: absolute; bottom: 5%; left: 0; right: 0; display: flex; justify-content: space-around; align-items: flex-end; z-index: 10; }
+        .workstation-visual { width: 70px; height: 70px; cursor: pointer; position: relative; display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 2rem; border: 2px solid var(--border-color); background-color: #8b7e75; border-radius: 5px; transition: all 0.2s; }
+        .workstation-visual.ready { cursor: grab; }
+        .workstation-visual.ready:active { cursor: grabbing; }
+        .workstation-visual:hover { transform: translateY(-5px); box-shadow: 0 5px 15px var(--glow-color); }
+        .workstation-visual.hidden { display: none; }
+        .workstation-progress { position: absolute; bottom: 0; left: 0; right: 0; height: 5px; background-color: rgba(0,0,0,0.5); }
+        .workstation-progress > span { display: block; height: 100%; background-color: var(--success-color); transition: width 0.05s linear; box-shadow: 0 0 5px var(--success-color); }
+        
+        /* Customer/Ship Area */
+        #customer-queue { position: absolute; top: 10%; left: 20px; width: 100px; height: 80%; display: flex; flex-direction: column; gap: 10px; } /* Changed to left */
+        .customer-ship {
+            width: 80px; height: 80px; background-color: #4a4a6a; border: 2px solid var(--border-color); border-radius: 50%;
+            display: flex; justify-content: center; align-items: center; font-size: 2.5rem;
+            transition: all 0.5s ease-in-out;
+            position: relative;
+        }
+        .customer-ship.drag-over { border-color: var(--success-color); box-shadow: 0 0 15px var(--success-color); }
+        .order-bubble {
+            position: absolute; top: -25px; left: 50%; transform: translateX(-50%);
+            background-color: #fff; color: #000; border-radius: 50%; width: 30px; height: 30px;
+            display: flex; justify-content: center; align-items: center; font-size: 1.2rem;
+            text-shadow: none; box-shadow: 0 2px 5px #000;
+        }
+        .patience-bar { position: absolute; bottom: -10px; left: 10%; width: 80%; height: 5px; background-color: #555; border-radius: 2px; }
+        .patience-bar > span { display: block; height: 100%; background-color: var(--success-color); border-radius: 2px; transition: width 1s linear; }
+
+        .floating-text { position: absolute; font-size: 1.5rem; color: var(--warning-color); text-shadow: 2px 2px #000; animation: floatUp 1.5s ease-out forwards; pointer-events: none; z-index: 100; }
+        @keyframes floatUp { from { opacity: 1; transform: translateY(0); } to { opacity: 0; transform: translateY(-50px); } }
+
+        /* Upgrade Card - COMPACT DESIGN */
+        .upgrade-card {
+            background-color: rgba(0,0,0,0.2);
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            padding: 0.5rem;
+            margin-bottom: 0.5rem; /* Reduced margin */
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .upgrade-card-info {
+            flex-grow: 1;
+        }
+        .upgrade-card-actions {
+            flex-shrink: 0;
+            width: 90px; /* Fixed width for buttons */
+            margin-left: 0.5rem;
+        }
+        .upgrade-card h4 { color: var(--success-color); margin-bottom: 0.25rem; font-size: 0.7rem; }
+        .upgrade-card p { font-size: 0.6rem; opacity: 0.8; }
+        .action-btn { font-size: 0.65rem; padding: 4px; width: 100%; border-radius: 3px; margin-bottom: 3px; border: none; cursor: pointer; transition: all 0.2s; }
+        .action-btn:disabled { background-color: #555 !important; cursor: not-allowed; }
+        .btn-upgrade { background-color: #008060; } .btn-upgrade:hover:not(:disabled) { background-color: var(--success-color); color: #000; }
+        .btn-hire { background-color: #b8a012; } .btn-hire:hover:not(:disabled) { background-color: var(--warning-color); color: #000; }
+        .btn-prestige { background-color: #7d26a8; } .btn-prestige:hover:not(:disabled) { background-color: var(--prestige-color); }
+        .btn-help { background-color: #1d4ed8; } .btn-help:hover:not(:disabled) { background-color: #3b82f6; }
+
+
+        /* Starfield Canvas */
+        #starfield-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
+        .main-container { position: relative; z-index: 1; }
+
+        /* Prestige Screen Shake */
+        @keyframes screenShake { 0%,100%{transform:translate(0,0)} 10%{transform:translate(-8px,4px)} 20%{transform:translate(8px,-4px)} 30%{transform:translate(-6px,-6px)} 40%{transform:translate(6px,6px)} 50%{transform:translate(-4px,2px)} 60%{transform:translate(4px,-2px)} 70%{transform:translate(-2px,6px)} 80%{transform:translate(2px,-6px)} 90%{transform:translate(-2px,2px)} }
+        @keyframes prestigeFlash { 0%{opacity:0} 30%{opacity:0.7} 100%{opacity:0} }
+        .shake { animation: screenShake 0.6s ease-out; }
+        #prestige-flash { position: fixed; top:0;left:0;right:0;bottom:0; background: radial-gradient(ellipse at center, #a855f7 0%, transparent 70%); pointer-events: none; z-index: 998; opacity: 0; }
+        .prestige-flash-anim { animation: prestigeFlash 1s ease-out forwards; }
+
+        /* Workstation Pulse Glow */
+        @keyframes pulseGlow { 0%,100%{box-shadow:0 0 10px var(--success-color)} 50%{box-shadow:0 0 30px var(--success-color), 0 0 60px var(--success-color)} }
+        .workstation-visual.ready { animation: pulseGlow 1s ease-in-out infinite; cursor: grab; }
+        .workstation-visual.ready:active { cursor: grabbing; }
+
+        /* Customer Ship Slide-in */
+        @keyframes slideInFromTop { from {transform: translateX(-120px); opacity:0;} to {transform: translateX(0); opacity:1;} }
+        @keyframes slideInFromLeft { from {transform: translateX(-80px); opacity:0;} to {transform: translateX(0); opacity:1;} }
+        .customer-ship.entering { animation: slideInFromLeft 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+
+        /* Particle */
+        .particle { position: fixed; pointer-events: none; z-index: 200; font-size: 1.2rem; animation: particleFly 1s ease-out forwards; }
+        @keyframes particleFly { 0%{opacity:1;transform:translate(0,0) scale(1)} 100%{opacity:0;transform:translate(var(--tx),var(--ty)) scale(0.3)} }
+
+        /* Offline Income Modal */
+        #offline-modal, #achievement-toast, #daily-bonus-modal {
+            position: fixed; z-index: 1000;
+        }
+        #offline-modal, #daily-bonus-modal {
+            top:0;left:0;right:0;bottom:0;
+            background-color: rgba(0,0,0,0.85);
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+        #achievement-toast {
+            bottom: 20px; right: 20px;
+            background: linear-gradient(135deg, #1d1b34, #2c2a4a);
+            border: 2px solid var(--warning-color);
+            border-radius: 8px;
+            padding: 0.8rem 1.2rem;
+            min-width: 220px;
+            max-width: 300px;
+            transform: translateX(400px);
+            transition: transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+            box-shadow: 0 0 20px rgba(247,213,29,0.4);
+        }
+        #achievement-toast.show { transform: translateX(0); }
+        #achievement-toast .toast-title { color: var(--warning-color); font-size: 0.65rem; margin-bottom: 0.3rem; }
+        #achievement-toast .toast-body { font-size: 0.6rem; opacity: 0.9; }
+
+        /* Help Modal */
+        #help-modal {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0,0,0,0.8);
+            z-index: 999;
+            display: none; /* Hidden by default */
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Cafe Level Bar */
+        #cafe-level-bar { grid-area: header; display: flex; flex-direction: column; gap: 0.3rem; }
+        #cafe-level-bar .level-row { display: flex; justify-content: space-around; align-items: center; flex-wrap: wrap; gap: 0.3rem; }
+        #level-progress-wrap { width: 100%; background: rgba(0,0,0,0.4); border-radius: 4px; height: 8px; margin-top: 0.2rem; }
+        #level-progress-bar { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--glow-color), var(--prestige-color)); transition: width 0.5s ease; box-shadow: 0 0 8px var(--glow-color); }
+        #level-label { font-size: 0.55rem; opacity: 0.7; text-align: center; }
+
+        /* Space Event Banner */
+        #event-banner {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 900;
+            padding: 0.5rem 1rem;
+            font-size: 0.7rem;
+            text-align: center;
+            display: none;
+            animation: eventSlideDown 0.5s ease forwards;
+        }
+        @keyframes eventSlideDown { from{transform:translateY(-100%)} to{transform:translateY(0)} }
+        .event-meteor { background: linear-gradient(90deg,#7f1d1d,#991b1b); border-bottom: 2px solid #ef4444; }
+        .event-vip { background: linear-gradient(90deg,#78350f,#92400e); border-bottom: 2px solid var(--warning-color); }
+        .event-rush { background: linear-gradient(90deg,#1e3a5f,#1e40af); border-bottom: 2px solid #60a5fa; }
+
+        /* Achievements Modal */
+        #achievements-modal {
+            position: fixed; top:0;left:0;right:0;bottom:0;
+            background-color: rgba(0,0,0,0.88);
+            z-index: 1001;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+        #achievements-modal .ach-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; max-height: 60vh; overflow-y: auto; margin: 0.8rem 0; }
+        .ach-card { background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.5rem; font-size: 0.55rem; }
+        .ach-card.unlocked { border-color: var(--warning-color); background: rgba(247,213,29,0.08); }
+        .ach-card .ach-icon { font-size: 1.4rem; margin-bottom: 0.2rem; }
+        .ach-card .ach-name { color: var(--warning-color); margin-bottom: 0.2rem; }
+        .ach-card.locked .ach-name { color: #888; }
+        .ach-card.locked .ach-desc { opacity: 0.4; }
+        #ach-btn { position: relative; }
+        #ach-badge { position: absolute; top: -6px; right: -6px; background: var(--error-color); color: #fff; border-radius: 50%; width: 16px; height: 16px; font-size: 0.5rem; display: none; justify-content: center; align-items: center; }
+        #ach-badge.show { display: flex; }
+
+        /* Better Help Modal */
+        #help-modal .help-inner { overflow-y: auto; max-height: 70vh; padding-right: 0.3rem; }
+        #help-modal .help-section { margin-bottom: 1rem; padding: 0.6rem; background: rgba(0,0,0,0.2); border-radius: 6px; border-left: 3px solid var(--glow-color); }
+        #help-modal .help-section h4 { color: var(--glow-color); font-size: 0.65rem; margin-bottom: 0.4rem; }
+        #help-modal .help-section p, #help-modal .help-section li { font-size: 0.55rem; line-height: 1.8; opacity: 0.85; }
+
+        /* Mobile Responsive Styles */
+        @media (max-width: 768px) {
+            body { overflow: hidden; }
+            .main-container {
+                grid-template-columns: 1fr;
+                grid-template-rows: auto 1fr;
+                grid-template-areas:
+                    "header"
+                    "main";
+                height: calc(100vh - 56px);
+                padding: 0.4rem;
+                gap: 0.4rem;
+            }
+            #upgrades-panel { display: none; }
+            #upgrades-panel.mobile-active { display: flex; position: fixed; top: 0; left: 0; right: 0; bottom: 56px; z-index: 800; border-radius: 0; overflow-y: auto; }
+            #main-view-panel.mobile-hidden { display: none; }
+            #customer-queue { top: 10px; right: auto; left: 10px; width: calc(100% - 20px); height: 80px; flex-direction: row; gap: 8px; justify-content: flex-start; align-items: center; }
+            .customer-ship { width: 64px; height: 64px; font-size: 2rem; }
+            .order-bubble { width: 26px; height: 26px; font-size: 1rem; top: -16px; }
+            .patience-bar { bottom: -8px; }
+            .workstation-visual { width: 65px; height: 65px; font-size: 2rem; }
+            #cafe-level-bar .level-row { font-size: 0.6rem; padding: 0.3rem; gap: 0.4rem; }
+            #achievement-toast { bottom: 64px; right: 8px; }
+        }
+        /* Mobile Bottom Nav */
+        #mobile-nav {
+            display: none;
+            position: fixed; bottom: 0; left: 0; right: 0; height: 56px;
+            background: var(--secondary-bg);
+            border-top: 2px solid var(--border-color);
+            z-index: 810;
+            justify-content: space-around;
+            align-items: center;
+        }
+        @media (max-width: 768px) { #mobile-nav { display: flex; } }
+        .mob-nav-btn { background: none; border: none; color: var(--text-color); font-size: 1.4rem; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 8px; border-radius: 6px; transition: background 0.2s; }
+        .mob-nav-btn span { font-size: 0.4rem; opacity: 0.7; }
+        .mob-nav-btn.active { background: rgba(255,0,255,0.15); color: var(--glow-color); }
+        .mob-nav-btn.active span { opacity: 1; color: var(--glow-color); }
+    </style>
+</head>
+<body>
+    <!-- Starfield Canvas -->
+    <canvas id="starfield-canvas"></canvas>
+    <!-- Prestige Flash Overlay -->
+    <div id="prestige-flash"></div>
+
+    <!-- Offline Income Modal -->
+    <div id="offline-modal">
+        <div class="panel w-11/12 max-w-sm text-center">
+            <div style="font-size:3rem;margin-bottom:1rem;">🌌</div>
+            <h3 class="text-lg mb-3" style="color:var(--warning-color);">Welcome Back!</h3>
+            <p class="text-xs mb-2" style="opacity:0.8;">While you were away, your cafe earned:</p>
+            <p id="offline-earned" class="text-2xl mb-4" style="color:var(--success-color);">0 Credits</p>
+            <p id="offline-time" class="text-xs mb-4" style="opacity:0.6;"></p>
+            <button id="close-offline-btn" class="action-btn btn-upgrade">Claim Earnings!</button>
+        </div>
+    </div>
+
+    <!-- Daily Bonus Modal -->
+    <div id="daily-bonus-modal">
+        <div class="panel w-11/12 max-w-sm text-center">
+            <div style="font-size:3rem;margin-bottom:1rem;">🎁</div>
+            <h3 class="text-lg mb-3" style="color:var(--prestige-color);">Daily Bonus!</h3>
+            <p class="text-xs mb-2" style="opacity:0.8;">You get a daily reward for returning!</p>
+            <p id="daily-bonus-amount" class="text-2xl mb-4" style="color:var(--prestige-color);">+1 🔮 Dark Matter</p>
+            <button id="close-daily-btn" class="action-btn btn-prestige">Claim!</button>
+        </div>
+    </div>
+
+    <!-- Achievement Toast -->
+    <div id="achievement-toast">
+        <div class="toast-title">🏆 Achievement Unlocked!</div>
+        <div id="achievement-toast-body" class="toast-body"></div>
+    </div>
+
+    <!-- Space Event Banner -->
+    <div id="event-banner"></div>
+
+    <!-- Achievements Modal -->
+    <div id="achievements-modal">
+        <div class="panel w-11/12 max-w-md">
+            <h3 class="text-center text-lg mb-2" style="color:var(--warning-color);">🏆 Achievements</h3>
+            <p id="ach-count" class="text-center text-xs mb-2" style="opacity:0.6;"></p>
+            <div class="ach-grid" id="ach-grid"></div>
+            <button id="close-ach-btn" class="action-btn btn-prestige mt-2">Close</button>
+        </div>
+    </div>
+
+    <!-- Help Modal (Improved) -->
+    <div id="help-modal">
+        <div class="panel w-11/12 max-w-md">
+            <h3 class="text-center text-lg mb-3" style="color: var(--warning-color);">📖 Game Guide</h3>
+            <div class="help-inner">
+                <div class="help-section">
+                    <h4>🚀 Goal</h4>
+                    <p>Become the biggest Space Cafe in the galaxy! Serve customers, earn credits, unlock new items and prestige to gain permanent power-ups.</p>
+                </div>
+                <div class="help-section">
+                    <h4>💰 How to Earn</h4>
+                    <ul class="list-disc list-inside ml-2">
+                        <li>Customer ships arrive on the left with an order bubble above them.</li>
+                        <li>Click a workstation (bottom) to start making that item.</li>
+                        <li>When it glows & pulses → it's ready!</li>
+                        <li>Drag the glowing workstation onto the matching ship to earn credits.</li>
+                        <li>On mobile: tap the workstation, then tap the customer ship.</li>
+                    </ul>
+                </div>
+                <div class="help-section">
+                    <h4>🤖 Automation</h4>
+                    <ul class="list-disc list-inside ml-2">
+                        <li><b>Station Manager</b> — auto-starts production when a customer orders.</li>
+                        <li><b>Serving Droid</b> — auto-delivers finished products to the right ship.</li>
+                    </ul>
+                </div>
+                <div class="help-section">
+                    <h4>⚡ Space Events</h4>
+                    <ul class="list-disc list-inside ml-2">
+                        <li><b>☄️ Meteor Shower</b> — all customers lose patience faster! Serve quickly.</li>
+                        <li><b>👑 VIP Customer</b> — a special ship arrives worth 5x income!</li>
+                        <li><b>🌊 Galactic Rush</b> — double customer arrival rate for 30 seconds.</li>
+                    </ul>
+                </div>
+                <div class="help-section">
+                    <h4>🔮 Prestige</h4>
+                    <p>Reset the game to earn Dark Matter. Spend Dark Matter on permanent upgrades that carry over every run!</p>
+                </div>
+                <div class="help-section">
+                    <h4>🎁 Daily Bonus</h4>
+                    <p>Return each day to claim free Dark Matter. Bonus increases with each prestige!</p>
+                </div>
+            </div>
+            <button id="close-help-btn" class="action-btn btn-prestige mt-3">Close</button>
+        </div>
+    </div>
+
+    <!-- Mobile Bottom Nav -->
+    <nav id="mobile-nav">
+        <button class="mob-nav-btn active" id="mob-cafe-btn" onclick="mobileNav('cafe')">☕<span>Cafe</span></button>
+        <button class="mob-nav-btn" id="mob-upgrades-btn" onclick="mobileNav('upgrades')">🔧<span>Upgrades</span></button>
+        <button class="mob-nav-btn" id="mob-ach-btn" onclick="openAchModal()">🏆<span>Medals</span></button>
+        <button class="mob-nav-btn" id="mob-help-btn" onclick="document.getElementById('help-modal').style.display='flex'">❓<span>Help</span></button>
+    </nav>
+
+    <div class="main-container">
+        <div id="cafe-level-bar" class="panel">
+            <div class="level-row">
+                <span style="font-size:0.7rem;">💰 <span id="credits">0</span></span>
+                <span style="font-size:0.7rem;">🔮 <span id="dark-matter">0</span></span>
+                <span style="font-size:0.7rem;">⭐ <span id="reputation">0</span></span>
+                <span id="cafe-level-display" style="font-size:0.65rem;color:var(--glow-color);">Cafe Lv.1</span>
+                <div style="display:flex;gap:0.4rem;">
+                    <button id="ach-btn" class="btn-help text-xs px-2 py-1 rounded-md" onclick="openAchModal()">🏆<div id="ach-badge"></div></button>
+                    <button id="help-btn" class="btn-help text-xs px-2 py-1 rounded-md">❓</button>
+                </div>
+            </div>
+            <div id="level-progress-wrap"><div id="level-progress-bar" style="width:0%"></div></div>
+            <div id="level-label">Next level: 10 rep needed</div>
+        </div>
+
+        <div id="upgrades-panel" class="panel">
+            <div class="panel-sub-tabs">
+                <button class="sub-tab-btn active" data-panel="workstations">Stations</button>
+                <button class="sub-tab-btn" data-panel="menu">Menu</button>
+                <button class="sub-tab-btn" data-panel="staff">Staff</button>
+                <button class="sub-tab-btn" data-panel="global">Global</button>
+                <button class="sub-tab-btn" data-panel="prestige">Prestige</button>
+            </div>
+            <div id="upgrades-content" class="flex-grow overflow-y-auto">
+                <div id="workstations-panel-content" class="panel-content active"></div>
+                <div id="menu-panel-content" class="panel-content"></div>
+                <div id="staff-panel-content" class="panel-content"></div>
+                <div id="global-panel-content" class="panel-content"></div>
+                <div id="prestige-panel-content" class="panel-content"></div>
+            </div>
+        </div>
+
+        <div id="main-view-panel" class="panel">
+            <div id="cafe-view">
+                <div id="station-interior">
+                     <div id="customer-queue"></div>
+                    <div id="workstation-area">
+                        <div id="visual-espresso" class="workstation-visual hidden" onclick="clickWorkstation('espresso')">☕️<div class="workstation-progress"><span id="progress-bar-espresso"></span></div></div>
+                        <div id="visual-smoothie" class="workstation-visual hidden" onclick="clickWorkstation('smoothie')">🥤<div class="workstation-progress"><span id="progress-bar-smoothie"></span></div></div>
+                        <div id="visual-pastry" class="workstation-visual hidden" onclick="clickWorkstation('pastry')">🥐<div class="workstation-progress"><span id="progress-bar-pastry"></span></div></div>
+                        <div id="visual-nebula_tea" class="workstation-visual hidden" onclick="clickWorkstation('nebula_tea')">🫖<div class="workstation-progress"><span id="progress-bar-nebula_tea"></span></div></div>
+                        <div id="visual-galaxy_cake" class="workstation-visual hidden" onclick="clickWorkstation('galaxy_cake')">🎂<div class="workstation-progress"><span id="progress-bar-galaxy_cake"></span></div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Starfield ---
+        (function initStarfield() {
+            const canvas = document.getElementById('starfield-canvas');
+            const ctx = canvas.getContext('2d');
+            let stars = [];
+            function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+            function createStars() {
+                stars = [];
+                const count = Math.floor((canvas.width * canvas.height) / 4000);
+                for (let i = 0; i < count; i++) {
+                    stars.push({
+                        x: Math.random() * canvas.width,
+                        y: Math.random() * canvas.height,
+                        r: Math.random() * 1.5 + 0.2,
+                        speed: Math.random() * 0.3 + 0.05,
+                        brightness: Math.random(),
+                        twinkleSpeed: Math.random() * 0.02 + 0.005,
+                        twinkleOffset: Math.random() * Math.PI * 2
+                    });
+                }
+            }
+            let t = 0;
+            function drawStars() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                t += 1;
+                stars.forEach(s => {
+                    s.y += s.speed;
+                    if (s.y > canvas.height) { s.y = 0; s.x = Math.random() * canvas.width; }
+                    const twinkle = 0.4 + 0.6 * Math.abs(Math.sin(t * s.twinkleSpeed + s.twinkleOffset));
+                    ctx.beginPath();
+                    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(255,255,255,${twinkle * s.brightness})`;
+                    ctx.fill();
+                });
+                requestAnimationFrame(drawStars);
+            }
+            resize();
+            createStars();
+            drawStars();
+            window.addEventListener('resize', () => { resize(); createStars(); });
+        })();
+
+        // --- Sound Engine ---
+        const playSound = (note, duration = '8n') => { if (Tone.context.state !== 'running') { Tone.context.resume().catch(e => console.error(e)); } const tempSynth = new Tone.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.005, decay: 0.1, sustain: 0.3, release: 0.1 } }).toDestination(); tempSynth.triggerAttackRelease(note, duration); setTimeout(() => { tempSynth.dispose(); }, 500); }
+        const playClickSound = () => playSound('C4', '16n');
+        const playCashSound = () => playSound('E5', '16n');
+        const playUpgradeSound = () => { playSound('C5', '16n'); setTimeout(() => playSound('G5', '16n'), 100); }
+        const playPrestigeSound = () => { playSound('G6', '2n'); }
+        const playErrorSound = () => playSound('C3', '8n');
+
+        // --- Game State ---
+        let gameState = {};
+        let customers = [];
+        let nextCustomerId = 0;
+        let activeEvent = null;
+        let eventTimer = 0;
+        let timeSinceLastEvent = 0;
+
+        const initialGameState = {
+            credits: 10, darkMatter: 0, reputation: 0, lastUpdate: Date.now(),
+            workstations: {
+                espresso:    { level: 0, progress: 0, manager: false, productReady: false },
+                smoothie:    { level: 0, progress: 0, manager: false, productReady: false },
+                pastry:      { level: 0, progress: 0, manager: false, productReady: false },
+                nebula_tea:  { level: 0, progress: 0, manager: false, productReady: false },
+                galaxy_cake: { level: 0, progress: 0, manager: false, productReady: false },
+            },
+            menu: {
+                espresso_1:    { unlocked: true,  level: 1 },
+                smoothie_1:    { unlocked: false, level: 1 },
+                pastry_1:      { unlocked: false, level: 1 },
+                nebula_tea_1:  { unlocked: false, level: 1 },
+                galaxy_cake_1: { unlocked: false, level: 1 },
+            },
+            staff: { barista: { hired: 0 }, serving_droid: { hired: 0 } },
+            globalUpgrades: { queue_size: 0 },
+            prestigeUpgrades: { incomeBoost: 1, speedBoost: 1, autoStart: 0 },
+        };
+
+        // --- Game Data ---
+        const WORKSTATION_DATA = {
+            espresso:    { name: 'Espresso',    icon: '☕️', baseCost: 4,      baseIncome: 1,    baseTime: 3000  },
+            smoothie:    { name: 'Smoothie',    icon: '🥤', baseCost: 60,     baseIncome: 15,   baseTime: 6000  },
+            pastry:      { name: 'Pastry',      icon: '🥐', baseCost: 720,    baseIncome: 90,   baseTime: 12000 },
+            nebula_tea:  { name: 'Nebula Tea',  icon: '🫖', baseCost: 8000,   baseIncome: 600,  baseTime: 18000 },
+            galaxy_cake: { name: 'Galaxy Cake', icon: '🎂', baseCost: 90000,  baseIncome: 4000, baseTime: 30000 },
+        };
+        const MENU_DATA = {
+            espresso_1:    { name: 'Better Beans',         baseCost: 50,      multiplier: 2 },
+            smoothie_1:    { name: 'Exotic Fruits',        baseCost: 500,     multiplier: 2 },
+            pastry_1:      { name: 'Cosmic Sugar',         baseCost: 6000,    multiplier: 2 },
+            nebula_tea_1:  { name: 'Star Herbs',           baseCost: 40000,   multiplier: 2 },
+            galaxy_cake_1: { name: 'Dark Matter Frosting', baseCost: 400000,  multiplier: 2 },
+        };
+        const STAFF_DATA = { barista: { name: 'Station Manager', baseCost: 1000, effect: 'Automatically starts production for ordered items.' }, serving_droid: { name: 'Serving Droid', baseCost: 50000, effect: 'Automatically delivers finished products.' } };
+        const GLOBAL_UPGRADE_DATA = { queue_size: { name: 'Expand Queue', baseCost: 10000, effect: 'Increases customer queue size by 1.' } };
+        const PRESTIGE_UPGRADE_DATA = { incomeBoost: { name: 'Double Income', cost: 1, effect: 'Permanently doubles the income of all stations.' }, speedBoost: { name: 'Speed Boost', cost: 5, effect: 'Permanently increases the speed of all stations by 10%.' }, autoStart: { name: 'Auto-Start', cost: 10, effect: 'Start with the Espresso station already automated.' }, };
+        
+        // --- Calculation Functions ---
+        const getWorkstationCost = (id) => WORKSTATION_DATA[id].baseCost * Math.pow(1.15, gameState.workstations[id].level);
+        const getWorkstationIncome = (id) => {
+            if (gameState.workstations[id].level === 0) return 0;
+            let income = WORKSTATION_DATA[id].baseIncome * gameState.workstations[id].level;
+            const menuKey = id + '_1';
+            if (gameState.menu[menuKey] && gameState.menu[menuKey].unlocked)
+                income *= Math.pow(MENU_DATA[menuKey].multiplier, gameState.menu[menuKey].level);
+            income *= gameState.prestigeUpgrades.incomeBoost;
+            if (activeEvent === 'vip_customer') income *= 1; // applied per-order in fulfillOrder
+            return income;
+        };
+        const getWorkstationTime = (id) => { let time = WORKSTATION_DATA[id].baseTime; time /= gameState.prestigeUpgrades.speedBoost; return time; };
+        const getMenuCost = (id) => MENU_DATA[id].baseCost * Math.pow(3, gameState.menu[id].level - 1);
+        const getStaffCost = (id) => STAFF_DATA[id].baseCost * Math.pow(5, gameState.staff[id].hired);
+        const getGlobalUpgradeCost = (id) => GLOBAL_UPGRADE_DATA[id].baseCost * Math.pow(10, gameState.globalUpgrades[id]);
+
+        // --- Core Game Functions ---
+        function buyWorkstation(id) { const cost = getWorkstationCost(id); if (gameState.credits >= cost) { gameState.credits -= cost; gameState.workstations[id].level++; playUpgradeSound(); updateUI(); checkAchievements(); } }
+        function hireStaff(id) { const cost = getStaffCost(id); if (gameState.credits >= cost) { gameState.credits -= cost; gameState.staff[id].hired++; playUpgradeSound(); updateUI(); checkAchievements(); } }
+        function upgradeMenu(id) { const cost = getMenuCost(id); if (gameState.credits >= cost) { gameState.credits -= cost; gameState.menu[id].level++; playUpgradeSound(); updateUI(); } }
+        function researchMenu(id, workstationId, cost) { if (gameState.credits >= cost && gameState.workstations[workstationId].level >= 1) { gameState.credits -= cost; gameState.menu[id].unlocked = true; playUpgradeSound(); updateUI(); } }
+        function buyGlobalUpgrade(id) { const cost = getGlobalUpgradeCost(id); if (gameState.credits >= cost) { gameState.credits -= cost; gameState.globalUpgrades[id]++; playUpgradeSound(); updateUI(); } }
+        function buyPrestigeUpgrade(id) { const data = PRESTIGE_UPGRADE_DATA[id]; const cost = data.cost; if (gameState.darkMatter >= cost) { gameState.darkMatter -= cost; if (id === 'incomeBoost') gameState.prestigeUpgrades.incomeBoost *= 2; if (id === 'speedBoost') gameState.prestigeUpgrades.speedBoost += 0.1; if (id === 'autoStart') gameState.prestigeUpgrades.autoStart = 1; playUpgradeSound(); updateUI(); saveGame(); } }
+        
+        function calculatePrestige() { const totalEarnings = (gameState.credits + Object.values(gameState.workstations).reduce((sum, ws, index) => { const stationId = Object.keys(WORKSTATION_DATA)[index]; for(let i = 0; i < ws.level; i++) { sum += WORKSTATION_DATA[stationId].baseCost * Math.pow(1.15, i); } return sum; }, 0)); return Math.floor(150 * Math.sqrt(totalEarnings / 1e7)); }
+        function prestige() { const earnedDM = calculatePrestige(); if (earnedDM > 0) { const oldDarkMatter = gameState.darkMatter; const oldAchievements = gameState.unlockedAchievements || []; const oldLastDaily = gameState.lastDailyBonus; const oldPrestigeCount = (gameState.prestigeCount || 0) + 1; gameState = JSON.parse(JSON.stringify(initialGameState)); customers = []; renderedCustomerIds.clear(); gameState.darkMatter = oldDarkMatter + earnedDM; gameState.unlockedAchievements = oldAchievements; gameState.lastDailyBonus = oldLastDaily; gameState.prestigeCount = oldPrestigeCount; if(gameState.prestigeUpgrades.autoStart > 0){ gameState.workstations.espresso.manager = true; } triggerPrestigeEffect(); playPrestigeSound(); saveGame(); updateUI(); checkAchievements(); } }
+
+        function clickWorkstation(stationId) {
+            const station = gameState.workstations[stationId];
+            if (!station.productReady && station.level > 0 && station.progress === 0) {
+                station.progress = 0.01;
+                playClickSound();
+            }
+        }
+
+        function fulfillOrder(customerId, stationId) {
+            const customer = customers.find(c => c.id === customerId);
+            if (!customer || customer.order !== stationId) { playErrorSound(); return; }
+            let income = getWorkstationIncome(stationId);
+            if (activeEvent === 'vip_customer' && !vipUsed) { income *= 5; vipUsed = true; clearEvent(); }
+            gameState.credits += income;
+            gameState.reputation += 1;
+            gameState.workstations[stationId].productReady = false;
+            playCashSound();
+            const customerEl = document.getElementById(`customer-${customerId}`);
+            if (customerEl) {
+                const rect = customerEl.getBoundingClientRect();
+                showFloatingText(`+${formatNumber(income)}`, rect.left, rect.top);
+                spawnParticles(rect.left + rect.width / 2, rect.top + rect.height / 2);
+                customerEl.style.transform = 'translateX(-200px)';
+                customerEl.style.opacity = '0';
+            }
+            checkAchievements();
+            setTimeout(() => { customers = customers.filter(c => c.id !== customerId); updateUI(); }, 500);
+        }
+
+        function spawnCustomer() {
+            const maxQueueSize = 4 + gameState.globalUpgrades.queue_size;
+            const unlockedStations = Object.keys(WORKSTATION_DATA).filter(id => gameState.workstations[id].level > 0);
+            if (unlockedStations.length === 0 || customers.length >= maxQueueSize) return;
+            const customerId = nextCustomerId++;
+            const order = unlockedStations[Math.floor(Math.random() * unlockedStations.length)];
+            const patience = 15000 + Math.random() * 5000;
+            const newCustomer = { id: customerId, order: order, patience: patience, maxPatience: patience };
+            customers.push(newCustomer);
+            updateUI();
+        }
+        
+        // --- UI Functions ---
+        function formatNumber(num) { if (num < 1e3) return num.toFixed(0); if (num < 1e6) return (num / 1e3).toFixed(2) + 'k'; if (num < 1e9) return (num / 1e6).toFixed(2) + 'M'; return (num / 1e9).toFixed(2) + 'B'; }
+        function showFloatingText(text, x, y, color = 'var(--warning-color)') { const floatingText = document.createElement('div'); floatingText.className = 'floating-text'; floatingText.textContent = text; floatingText.style.left = `${x}px`; floatingText.style.top = `${y}px`; floatingText.style.color = color; document.body.appendChild(floatingText); setTimeout(() => floatingText.remove(), 1500); }
+
+        function spawnParticles(x, y) {
+            const emojis = ['✨', '⭐', '💫', '🌟', '★'];
+            for (let i = 0; i < 8; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                p.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+                const angle = (i / 8) * Math.PI * 2;
+                const dist = 60 + Math.random() * 60;
+                p.style.setProperty('--tx', `${Math.cos(angle) * dist}px`);
+                p.style.setProperty('--ty', `${Math.sin(angle) * dist}px`);
+                p.style.left = `${x}px`;
+                p.style.top = `${y}px`;
+                document.body.appendChild(p);
+                setTimeout(() => p.remove(), 1000);
+            }
+        }
+
+        function triggerPrestigeEffect() {
+            const flash = document.getElementById('prestige-flash');
+            const container = document.querySelector('.main-container');
+            flash.classList.remove('prestige-flash-anim');
+            container.classList.remove('shake');
+            void flash.offsetWidth;
+            flash.classList.add('prestige-flash-anim');
+            container.classList.add('shake');
+            setTimeout(() => { container.classList.remove('shake'); }, 700);
+        }
+
+        function updateUI() {
+            document.getElementById('credits').textContent = formatNumber(gameState.credits);
+            document.getElementById('dark-matter').textContent = formatNumber(gameState.darkMatter);
+            document.getElementById('reputation').textContent = formatNumber(Math.floor(gameState.reputation));
+            updateCafeLevel();
+            updateWorkstationsPanel();
+            updateMenuPanel();
+            updateStaffPanel();
+            updateGlobalPanel();
+            updatePrestigePanel();
+            updateCustomerQueue();
+            for (const id in WORKSTATION_DATA) {
+                const station = gameState.workstations[id];
+                const el = document.getElementById(`visual-${id}`);
+                const progressBar = document.getElementById(`progress-bar-${id}`);
+                if (station.level > 0) {
+                    el.classList.remove('hidden');
+                    progressBar.style.width = `${station.progress * 100}%`;
+                    if(station.productReady){ el.style.boxShadow = `0 0 20px var(--success-color)`; el.style.borderColor = `var(--success-color)`; el.classList.add('ready'); el.setAttribute('draggable', true); } 
+                    else { el.style.boxShadow = `none`; el.style.borderColor = `var(--border-color)`; el.classList.remove('ready'); el.setAttribute('draggable', false); }
+                } else { el.classList.add('hidden'); }
+            }
+        }
+
+        const renderedCustomerIds = new Set();
+        function updateCustomerQueue() {
+            const container = document.getElementById('customer-queue');
+            const shipIcons = ['🛸', '🚀', '🛰️'];
+            // Remove departed customers
+            Array.from(container.children).forEach(el => {
+                const id = parseInt(el.dataset.customerId, 10);
+                if (!customers.find(c => c.id === id)) {
+                    el.remove();
+                    renderedCustomerIds.delete(id);
+                }
+            });
+            // Add new customers with slide-in animation
+            customers.forEach(customer => {
+                if (!renderedCustomerIds.has(customer.id)) {
+                    const customerEl = document.createElement('div');
+                    customerEl.id = `customer-${customer.id}`;
+                    customerEl.className = 'customer-ship entering';
+                    customerEl.dataset.customerId = customer.id;
+                    customerEl.innerHTML = `${shipIcons[customer.id % shipIcons.length]}<div class="order-bubble">${WORKSTATION_DATA[customer.order].icon}</div><div class="patience-bar"><span style="width:100%"></span></div>`;
+                    container.appendChild(customerEl);
+                    renderedCustomerIds.add(customer.id);
+                    setTimeout(() => customerEl.classList.remove('entering'), 600);
+                }
+            });
+        }
+
+        function updateWorkstationsPanel() { const container = document.getElementById('workstations-panel-content'); container.innerHTML = '<h4>-- Workstations --</h4>'; for (const id in WORKSTATION_DATA) { const station = gameState.workstations[id]; const data = WORKSTATION_DATA[id]; const cost = getWorkstationCost(id); const income = getWorkstationIncome(id); const card = document.createElement('div'); card.className = 'upgrade-card'; card.id = `upgrade-card-${id}`; card.innerHTML = `<div class="upgrade-card-info"><h4>${data.name} (Lvl ${station.level})</h4><p>Income: ${formatNumber(income)}</p></div><div class="upgrade-card-actions"><button class="action-btn btn-upgrade" onclick="buyWorkstation('${id}')" ${gameState.credits < cost ? 'disabled' : ''}>Upgrade (${formatNumber(cost)})</button></div>`; container.appendChild(card); } }
+        function updateMenuPanel() { const container = document.getElementById('menu-panel-content'); container.innerHTML = '<h4>-- Menu Research --</h4>'; for (const id in MENU_DATA) { const item = gameState.menu[id]; const data = MENU_DATA[id]; const card = document.createElement('div'); card.className = 'upgrade-card'; if (item.unlocked) { const cost = getMenuCost(id); card.innerHTML = `<div class="upgrade-card-info"><h4>${data.name} (Lvl ${item.level})</h4><p>Multiplier: x${Math.pow(data.multiplier, item.level).toFixed(1)}</p></div><div class="upgrade-card-actions"><button class="action-btn btn-upgrade" onclick="upgradeMenu('${id}')" ${gameState.credits < cost ? 'disabled' : ''}>Upgrade (${formatNumber(cost)})</button></div>`; } else { const researchCost = data.baseCost / 2; const workstationId = id.replace(/_1$/, ''); card.innerHTML = `<div class="upgrade-card-info"><h4>Research: ${data.name}</h4><p>Requires ${WORKSTATION_DATA[workstationId].name}</p></div><div class="upgrade-card-actions"><button class="action-btn btn-hire" onclick="researchMenu('${id}', '${workstationId}', ${researchCost})" ${gameState.credits < researchCost || gameState.workstations[workstationId].level === 0 ? 'disabled' : ''}>Research (${formatNumber(researchCost)})</button></div>`; } container.appendChild(card); } }
+        function updateStaffPanel() { const container = document.getElementById('staff-panel-content'); container.innerHTML = '<h4>-- Staff --</h4>'; for (const id in STAFF_DATA) { const staff = gameState.staff[id]; const data = STAFF_DATA[id]; const cost = getStaffCost(id); const card = document.createElement('div'); card.className = 'upgrade-card'; card.innerHTML = `<div class="upgrade-card-info"><h4>${data.name} (${staff.hired})</h4><p>${data.effect}</p></div><div class="upgrade-card-actions"><button class="action-btn btn-hire" onclick="hireStaff('${id}')" ${gameState.credits < cost ? 'disabled' : ''}>Hire (${formatNumber(cost)})</button></div>`; container.appendChild(card); } }
+        function updateGlobalPanel() { const container = document.getElementById('global-panel-content'); container.innerHTML = '<h4>-- Global Upgrades --</h4>'; for (const id in GLOBAL_UPGRADE_DATA) { const upgrade = gameState.globalUpgrades[id]; const data = GLOBAL_UPGRADE_DATA[id]; const cost = getGlobalUpgradeCost(id); const card = document.createElement('div'); card.className = 'upgrade-card'; card.innerHTML = `<div class="upgrade-card-info"><h4>${data.name} (Lvl: ${upgrade})</h4><p>${data.effect}</p></div><div class="upgrade-card-actions"><button class="action-btn btn-upgrade" onclick="buyGlobalUpgrade('${id}')" ${gameState.credits < cost ? 'disabled' : ''}>Buy (${formatNumber(cost)})</button></div>`; container.appendChild(card); } }
+        function updatePrestigePanel() { const container = document.getElementById('prestige-panel-content'); const earnedDM = calculatePrestige(); container.innerHTML = `<div class="upgrade-card text-center"><h4 style="color: var(--prestige-color)">Prestige</h4><p class="my-4">Reset to gain ${formatNumber(earnedDM)} Dark Matter 🔮</p><button class="action-btn btn-prestige" onclick="prestige()" ${earnedDM <= 0 ? 'disabled' : ''}>Travel to a new Galaxy!</button></div>`; for(const id in PRESTIGE_UPGRADE_DATA) { const data = PRESTIGE_UPGRADE_DATA[id]; const card = document.createElement('div'); card.className = 'upgrade-card'; card.innerHTML = `<div class="upgrade-card-info"><h4>${data.name}</h4><p>${data.effect}</p></div><div class="upgrade-card-actions"><button class="action-btn btn-prestige" onclick="buyPrestigeUpgrade('${id}')" ${gameState.darkMatter < data.cost ? 'disabled' : ''}>Buy (${data.cost} 🔮)</button></div>`; container.appendChild(card); } }
+        
+        // --- Cafe Level ---
+        const CAFE_LEVELS = [
+            { level: 1, rep: 0,    name: 'Tiny Booth' },
+            { level: 2, rep: 10,   name: 'Space Kiosk' },
+            { level: 3, rep: 30,   name: 'Orbit Cafe' },
+            { level: 4, rep: 75,   name: 'Lunar Diner' },
+            { level: 5, rep: 150,  name: 'Asteroid Bistro' },
+            { level: 6, rep: 300,  name: 'Nebula Lounge' },
+            { level: 7, rep: 600,  name: 'Galaxy Hub' },
+            { level: 8, rep: 1200, name: 'Star Empire' },
+            { level: 9, rep: 2500, name: 'Cosmic Legend' },
+            { level: 10,rep: 5000, name: 'Universal HQ' },
+        ];
+        function getCafeLevel() {
+            let lvl = CAFE_LEVELS[0];
+            for (const l of CAFE_LEVELS) { if (gameState.reputation >= l.rep) lvl = l; }
+            return lvl;
+        }
+        function updateCafeLevel() {
+            const cur = getCafeLevel();
+            const nextIdx = CAFE_LEVELS.findIndex(l => l.level === cur.level + 1);
+            const next = CAFE_LEVELS[nextIdx] || null;
+            document.getElementById('cafe-level-display').textContent = `🏠 Lv.${cur.level} ${cur.name}`;
+            if (next) {
+                const progress = Math.min(100, ((gameState.reputation - cur.rep) / (next.rep - cur.rep)) * 100);
+                document.getElementById('level-progress-bar').style.width = progress + '%';
+                document.getElementById('level-label').textContent = `${cur.name} → ${next.name}: ${Math.floor(gameState.reputation - cur.rep)}/${next.rep - cur.rep} rep`;
+            } else {
+                document.getElementById('level-progress-bar').style.width = '100%';
+                document.getElementById('level-label').textContent = `MAX LEVEL: ${cur.name}`;
+            }
+        }
+
+        // --- Space Events ---
+        const SPACE_EVENTS = [
+            { id: 'meteor_shower', name: '☄️ Meteor Shower!', desc: 'Customers lose patience 3x faster for 20s!', cls: 'event-meteor', duration: 20000 },
+            { id: 'vip_customer',  name: '👑 VIP Customer!',  desc: 'Next order earns 5x credits!',              cls: 'event-vip',    duration: 30000 },
+            { id: 'galactic_rush', name: '🌊 Galactic Rush!', desc: 'Double customers for 30s!',                 cls: 'event-rush',   duration: 30000 },
+        ];
+        let vipUsed = false;
+        function triggerRandomEvent() {
+            const eligible = SPACE_EVENTS.filter(e => {
+                if (e.id === 'vip_customer') return Object.values(gameState.workstations).some(w => w.level > 0);
+                return gameState.reputation >= 5;
+            });
+            if (!eligible.length) return;
+            const ev = eligible[Math.floor(Math.random() * eligible.length)];
+            activeEvent = ev.id;
+            eventTimer = ev.duration;
+            vipUsed = false;
+            const banner = document.getElementById('event-banner');
+            banner.className = ev.cls;
+            banner.textContent = `${ev.name} — ${ev.desc}`;
+            banner.style.display = 'block';
+            playSound('A5', '8n');
+        }
+        function clearEvent() {
+            activeEvent = null;
+            eventTimer = 0;
+            const banner = document.getElementById('event-banner');
+            banner.style.display = 'none';
+            banner.className = '';
+        }
+
+        // --- Achievements Modal ---
+        function openAchModal() {
+            if (!gameState.unlockedAchievements) gameState.unlockedAchievements = [];
+            const grid = document.getElementById('ach-grid');
+            grid.innerHTML = '';
+            const icons = { first_order:'👽', orders_10:'👾', orders_100:'🌟', orders_500:'🏆', credits_1k:'💰', credits_1m:'💸', first_prestige:'🔮', all_stations:'🔧', first_staff:'🤖', events_5:'⚡' };
+            ACHIEVEMENTS.forEach(a => {
+                const unlocked = gameState.unlockedAchievements.includes(a.id);
+                const card = document.createElement('div');
+                card.className = 'ach-card ' + (unlocked ? 'unlocked' : 'locked');
+                card.innerHTML = `<div class="ach-icon">${icons[a.id]||'❓'}</div><div class="ach-name">${a.name}</div><div class="ach-desc">${unlocked ? a.desc : '???'}</div>`;
+                grid.appendChild(card);
+            });
+            const unlockCount = gameState.unlockedAchievements.length;
+            document.getElementById('ach-count').textContent = `${unlockCount} / ${ACHIEVEMENTS.length} unlocked`;
+            document.getElementById('achievements-modal').style.display = 'flex';
+        }
+
+        // --- Mobile Nav ---
+        function mobileNav(tab) {
+            const upgradesPanel = document.getElementById('upgrades-panel');
+            const mainPanel = document.getElementById('main-view-panel');
+            const isMobile = window.innerWidth <= 768;
+            if (!isMobile) return;
+            document.querySelectorAll('.mob-nav-btn').forEach(b => b.classList.remove('active'));
+            if (tab === 'cafe') {
+                document.getElementById('mob-cafe-btn').classList.add('active');
+                upgradesPanel.classList.remove('mobile-active');
+                mainPanel.classList.remove('mobile-hidden');
+            } else if (tab === 'upgrades') {
+                document.getElementById('mob-upgrades-btn').classList.add('active');
+                upgradesPanel.classList.add('mobile-active');
+                mainPanel.classList.add('mobile-hidden');
+            }
+        }
+
+        // --- Achievements ---
+        const ACHIEVEMENTS = [
+            { id: 'first_order', name: 'First Order', desc: 'Serve your first customer.', condition: s => s.reputation >= 1 },
+            { id: 'orders_10', name: 'Getting Busy', desc: 'Serve 10 customers.', condition: s => s.reputation >= 10 },
+            { id: 'orders_100', name: 'Galactic Barista', desc: 'Serve 100 customers.', condition: s => s.reputation >= 100 },
+            { id: 'orders_500', name: 'Legendary Cafe', desc: 'Serve 500 customers.', condition: s => s.reputation >= 500 },
+            { id: 'credits_1k', name: 'Space Penny', desc: 'Earn 1,000 credits.', condition: s => s.credits >= 1000 },
+            { id: 'credits_1m', name: 'Millionaire', desc: 'Earn 1,000,000 credits.', condition: s => s.credits >= 1e6 },
+            { id: 'first_prestige', name: 'New Galaxy', desc: 'Prestige for the first time.', condition: s => s.darkMatter >= 1 },
+            { id: 'all_stations', name: 'Full Menu', desc: 'Unlock all workstations.', condition: s => Object.values(s.workstations).every(ws => ws.level >= 1) },
+            { id: 'first_staff', name: 'Not Alone', desc: 'Hire your first staff member.', condition: s => s.staff.barista.hired >= 1 || s.staff.serving_droid.hired >= 1 },
+        ];
+        let toastQueue = [];
+        let toastShowing = false;
+        function checkAchievements() {
+            if (!gameState.unlockedAchievements) gameState.unlockedAchievements = [];
+            let newUnlock = false;
+            ACHIEVEMENTS.forEach(a => {
+                if (!gameState.unlockedAchievements.includes(a.id) && a.condition(gameState)) {
+                    gameState.unlockedAchievements.push(a.id);
+                    toastQueue.push(a);
+                    newUnlock = true;
+                    processToastQueue();
+                }
+            });
+            if (newUnlock) {
+                const badge = document.getElementById('ach-badge');
+                if (badge) { badge.textContent = gameState.unlockedAchievements.length; badge.classList.add('show'); }
+            }
+        }
+        function processToastQueue() {
+            if (toastShowing || toastQueue.length === 0) return;
+            toastShowing = true;
+            const a = toastQueue.shift();
+            const toast = document.getElementById('achievement-toast');
+            document.getElementById('achievement-toast-body').textContent = `${a.name}: ${a.desc}`;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => { toastShowing = false; processToastQueue(); }, 500);
+            }, 3500);
+        }
+
+        // --- Offline Income ---
+        function calculateOfflineIncome(secondsAway) {
+            let incomePerSecond = 0;
+            for (const id in WORKSTATION_DATA) {
+                const station = gameState.workstations[id];
+                if (station.level > 0) {
+                    const cycleTime = getWorkstationTime(id) / 1000;
+                    const cyclesPerSec = 1 / cycleTime;
+                    incomePerSecond += getWorkstationIncome(id) * cyclesPerSec;
+                }
+            }
+            return incomePerSecond * secondsAway * 0.5;
+        }
+        function checkOfflineIncome() {
+            const now = Date.now();
+            const secondsAway = Math.floor((now - gameState.lastUpdate) / 1000);
+            if (secondsAway > 30) {
+                const maxSecs = 8 * 3600;
+                const clampedSecs = Math.min(secondsAway, maxSecs);
+                const earned = calculateOfflineIncome(clampedSecs);
+                if (earned > 0) {
+                    gameState.credits += earned;
+                    const hours = Math.floor(clampedSecs / 3600);
+                    const mins = Math.floor((clampedSecs % 3600) / 60);
+                    const timeStr = hours > 0 ? `${hours}h ${mins}m away` : `${mins}m away`;
+                    document.getElementById('offline-earned').textContent = `+${formatNumber(earned)} Credits`;
+                    document.getElementById('offline-time').textContent = `(${timeStr} - 50% efficiency)`;
+                    document.getElementById('offline-modal').style.display = 'flex';
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // --- Daily Bonus ---
+        function checkDailyBonus() {
+            const today = new Date().toDateString();
+            if (gameState.lastDailyBonus !== today) {
+                const bonusDM = 1 + Math.floor((gameState.prestigeCount || 0) / 2);
+                document.getElementById('daily-bonus-amount').textContent = `+${bonusDM} 🔮 Dark Matter`;
+                document.getElementById('daily-bonus-modal').dataset.bonus = bonusDM;
+                gameState.lastDailyBonus = today;
+                document.getElementById('daily-bonus-modal').style.display = 'flex';
+            }
+        }
+
+        // --- Save & Load ---
+        function saveGame() { gameState.lastUpdate = Date.now(); try { localStorage.setItem('spaceCafeManagerSave_v10', JSON.stringify(gameState)); } catch (e) { console.error(e); } }
+        function loadGame() { try { const savedGame = localStorage.getItem('spaceCafeManagerSave_v10'); if (savedGame) { const loadedState = JSON.parse(savedGame); gameState = deepMerge(initialGameState, loadedState); } else { gameState = JSON.parse(JSON.stringify(initialGameState)); } } catch (e) { gameState = JSON.parse(JSON.stringify(initialGameState)); } }
+        function deepMerge(target, source) { const output = { ...target }; if (isObject(target) && isObject(source)) { Object.keys(source).forEach(key => { if (isObject(source[key])) { if (!(key in target)) Object.assign(output, { [key]: source[key] }); else output[key] = deepMerge(target[key], source[key]); } else { Object.assign(output, { [key]: source[key] }); } }); } return output; }
+        function isObject(item) { return (item && typeof item === 'object' && !Array.isArray(item)); }
+
+        // --- Game Loop ---
+        let lastTime = 0;
+        let timeSinceLastSpawn = 5000;
+        function gameLoop(timestamp) {
+            if (!lastTime) lastTime = timestamp;
+            const deltaTime = (timestamp - lastTime);
+            lastTime = timestamp;
+            if (isNaN(deltaTime)) { requestAnimationFrame(gameLoop); return; }
+            
+            let needsUIUpdate = false;
+            for (const id in gameState.workstations) {
+                const station = gameState.workstations[id];
+                // Manager auto-starts production
+                if (gameState.staff.barista.hired > 0 && station.level > 0 && station.progress === 0 && !station.productReady) {
+                    const customerNeedsThis = customers.some(c => c.order === id);
+                    if (customerNeedsThis) {
+                        station.progress = 0.01;
+                    }
+                }
+                // Manual or manager-started production progresses
+                if (station.level > 0 && station.progress > 0 && !station.productReady) {
+                    station.progress += deltaTime / getWorkstationTime(id);
+                    if (station.progress >= 1) { station.progress = 0; station.productReady = true; needsUIUpdate = true; }
+                }
+                // Serving Droid auto-serves
+                if (gameState.staff.serving_droid.hired > 0 && station.productReady) {
+                    const customerToServe = customers.find(c => c.order === id);
+                    if(customerToServe){ fulfillOrder(customerToServe.id, id); needsUIUpdate = true; }
+                }
+            }
+            
+            // --- Event timer ---
+            if (activeEvent) {
+                eventTimer -= deltaTime;
+                if (eventTimer <= 0) clearEvent();
+            }
+            timeSinceLastEvent += deltaTime;
+            const eventInterval = Math.max(60000, 120000 - gameState.reputation * 50);
+            if (timeSinceLastEvent > eventInterval && !activeEvent && gameState.reputation >= 5) {
+                timeSinceLastEvent = 0;
+                triggerRandomEvent();
+            }
+
+            customers.forEach(customer => {
+                const patienceDrain = activeEvent === 'meteor_shower' ? deltaTime * 3 : deltaTime;
+                customer.patience -= patienceDrain;
+                if (customer.patience <= 0) {
+                    playErrorSound();
+                    const customerEl = document.getElementById(`customer-${customer.id}`);
+                    if (customerEl) {
+                        const rect = customerEl.getBoundingClientRect();
+                        showFloatingText("-1 ⭐", rect.left, rect.top, 'var(--error-color)');
+                        customerEl.style.transform = 'translateX(-200px)'; /* Changed for LTR */
+                        customerEl.style.opacity = '0';
+                    }
+                    gameState.reputation = Math.max(0, gameState.reputation - 1);
+                    setTimeout(() => { customers = customers.filter(c => c.id !== customer.id); updateUI(); }, 500);
+                }
+            });
+
+            timeSinceLastSpawn += deltaTime;
+            const totalLevels = Object.values(gameState.workstations).reduce((sum, s) => sum + s.level, 0);
+            let spawnInterval = Math.max(1500, 10000 - (gameState.reputation * 25) - (totalLevels * 75));
+            if (activeEvent === 'galactic_rush') spawnInterval = Math.max(500, spawnInterval / 2);
+            if (timeSinceLastSpawn > spawnInterval) {
+                spawnCustomer();
+                timeSinceLastSpawn = 0;
+            }
+
+            if (needsUIUpdate) { updateUI(); } 
+            else {
+                for (const id in WORKSTATION_DATA) {
+                    if (gameState.workstations[id]?.level > 0) {
+                        const progressBar = document.getElementById(`progress-bar-${id}`);
+                        if(progressBar) progressBar.style.width = `${gameState.workstations[id].progress * 100}%`;
+                    }
+                }
+                 customers.forEach(customer => {
+                    const el = document.querySelector(`#customer-${customer.id} .patience-bar span`);
+                    if(el) {
+                        const patiencePercent = (customer.patience / customer.maxPatience) * 100;
+                        el.style.width = `${patiencePercent}%`;
+                        if (patiencePercent < 30) el.style.backgroundColor = 'var(--error-color)';
+                        else if (patiencePercent < 60) el.style.backgroundColor = 'var(--warning-color)';
+                        else el.style.backgroundColor = 'var(--success-color)';
+                    }
+                });
+            }
+            requestAnimationFrame(gameLoop);
+        }
+        
+        document.addEventListener('DOMContentLoaded', () => {
+            loadGame();
+            const offlineShown = checkOfflineIncome();
+            if (!offlineShown) checkDailyBonus();
+            updateUI();
+            requestAnimationFrame(gameLoop);
+            setInterval(saveGame, 15000);
+
+            document.getElementById('close-offline-btn').addEventListener('click', () => {
+                document.getElementById('offline-modal').style.display = 'none';
+                updateUI();
+                checkDailyBonus();
+            });
+            document.getElementById('close-daily-btn').addEventListener('click', () => {
+                const bonus = parseInt(document.getElementById('daily-bonus-modal').dataset.bonus || '1', 10);
+                gameState.darkMatter += bonus;
+                document.getElementById('daily-bonus-modal').style.display = 'none';
+                updateUI();
+                saveGame();
+            });
+
+            // Help Modal Listeners
+            document.getElementById('help-btn').addEventListener('click', () => { document.getElementById('help-modal').style.display = 'flex'; });
+            document.getElementById('close-help-btn').addEventListener('click', () => { document.getElementById('help-modal').style.display = 'none'; });
+            document.getElementById('close-ach-btn').addEventListener('click', () => { document.getElementById('achievements-modal').style.display = 'none'; });
+            // Achievement badge: show count of unlocked after load
+            setTimeout(() => {
+                if (gameState.unlockedAchievements && gameState.unlockedAchievements.length > 0) {
+                    const badge = document.getElementById('ach-badge');
+                    badge.textContent = gameState.unlockedAchievements.length;
+                    badge.classList.add('show');
+                }
+            }, 500);
+
+            // Sub-tab listeners
+            document.querySelectorAll('.sub-tab-btn').forEach(button => {
+                button.addEventListener('click', () => {
+                    playClickSound();
+                    document.querySelectorAll('.sub-tab-btn').forEach(btn => btn.classList.remove('active'));
+                    button.classList.add('active');
+                    document.querySelectorAll('.panel-content').forEach(content => content.classList.remove('active'));
+                    document.getElementById(`${button.dataset.panel}-panel-content`).classList.add('active');
+                });
+            });
+
+            // Drag and Drop Listeners
+            document.addEventListener('dragstart', e => {
+                if (e.target && e.target.classList && e.target.classList.contains('workstation-visual')) {
+                    const stationId = e.target.id.split('-')[1];
+                    e.dataTransfer.setData('text/plain', stationId);
+                    e.dataTransfer.effectAllowed = 'move';
+                }
+            });
+            document.addEventListener('dragover', e => { if (e.target.closest('.customer-ship')) { e.preventDefault(); e.target.closest('.customer-ship').classList.add('drag-over'); } });
+            document.addEventListener('dragleave', e => { if (e.target.closest('.customer-ship')) { e.target.closest('.customer-ship').classList.remove('drag-over'); } });
+            document.addEventListener('drop', e => { e.preventDefault(); const customerShip = e.target.closest('.customer-ship'); if (customerShip) { customerShip.classList.remove('drag-over'); const stationId = e.dataTransfer.getData('text/plain'); const customerId = parseInt(customerShip.dataset.customerId, 10); fulfillOrder(customerId, stationId); } });
+        });
+    </script>
+</body>
+</html>
+�
