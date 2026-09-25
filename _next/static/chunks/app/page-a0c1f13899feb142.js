@@ -6,6 +6,7 @@
 ;
 ;
 ;
+;
 ;/* Xandra bespoke layer: brand weave, micro-interactions, easter eggs, voice, Oscar, cosmos */
 (function(){
 "use strict";
@@ -43,6 +44,8 @@ background:
  display:flex;align-items:center;justify-content:center;font-size:13px}
 /* Acceptance signature */
 .xa-accept{font-size:11px;color:rgba(216,180,254,.55);text-align:center;margin-top:14px;letter-spacing:.3px}
+.xa-paw-approved{display:inline-block;margin:8px auto 0;padding:4px 14px;border:2px solid rgba(168,85,247,.55);border-radius:999px;color:#d8b4fe;font-size:13px;font-weight:600;letter-spacing:.04em;transform:rotate(-2deg);background:rgba(168,85,247,.08)}
+.xa-paw-wrap{text-align:center}
 /* Konami celebration */
 #xa-konami{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
  background:rgba(10,5,25,.9);backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity .4s}
@@ -151,6 +154,16 @@ function addSignature(){
   var card = dims.closest("div[class*='rounded']") || dims.parentNode;
   if (card && card.parentNode) {
     card.parentNode.insertBefore(sig, card.nextSibling);
+    // Oscar Paw Approved stamp
+    if (!document.querySelector(".xa-paw-approved")) {
+      var wrap = document.createElement("div");
+      wrap.className = "xa-paw-wrap";
+      var stamp = document.createElement("span");
+      stamp.className = "xa-paw-approved";
+      stamp.innerHTML = "\u{1F43E} Oscar Paw Approved";
+      wrap.appendChild(stamp);
+      card.parentNode.insertBefore(wrap, sig.nextSibling);
+    }
   }
 }
 
