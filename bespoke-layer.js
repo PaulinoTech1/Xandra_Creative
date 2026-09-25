@@ -247,39 +247,66 @@ function molEgg(){
 
 
 /* ---------- 12. Fix broken TikTok/Instagram portals ---------- */
+function portalCard(url, emoji, title, desc, btn){
+  return '<a href="' + url + '" target="_blank" rel="noopener" data-xa-card="1" ' +
+    'style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:40px 20px;text-align:center;text-decoration:none">' +
+    '<span style="font-size:48px">' + emoji + '</span>' +
+    '<span style="color:#fff;font-weight:700;font-size:16px">' + title + '</span>' +
+    '<span style="color:#a78bfa;font-size:13px">' + desc + '</span>' +
+    '<span style="margin-top:8px;padding:10px 28px;border-radius:999px;font-size:14px;font-weight:600;color:#fff;' +
+    'background:linear-gradient(90deg,#ec4899,#8b5cf6,#06b6d4)">' + btn + '</span></a>';
+}
 function fixPortals(){
-  // TikTok: countik iframe is blocked by X-Frame-Options. Replace with profile card.
-  var tiktokIframes = document.querySelectorAll('iframe[src*="countik.com"]');
-  tiktokIframes.forEach(function(f){
-    var wrap = f.closest("div[class*='rounded']") || f.parentNode;
-    if (!wrap || wrap.dataset.fixed) return;
-    wrap.dataset.fixed = "1";
-    wrap.innerHTML = '<a href="https://www.tiktok.com/@xandrathecreative" target="_blank" rel="noopener" ' +
-      'style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:40px 20px;text-align:center;text-decoration:none">' +
-      '<span style="font-size:48px">\uD83C\uDFB5</span>' +
-      '<span style="color:#fff;font-weight:700;font-size:16px">Catch me on TikTok</span>' +
-      '<span style="color:#a78bfa;font-size:13px">Short-form chaos, fresh daily.<br>Tap in \u2192 @xandrathecreative</span>' +
-      '<span style="margin-top:8px;padding:10px 28px;border-radius:999px;font-size:14px;font-weight:600;color:#fff;' +
-      'background:linear-gradient(90deg,#ec4899,#8b5cf6,#06b6d4)">Visit TikTok</span></a>';
+  // Find portal sections by heading text, replace empty/blocked content with cards.
+  var portals = [
+    {match: "TikTok", url: "https://www.tiktok.com/@xandrathecreative",
+     emoji: "\uD83C\uDFB5", title: "Catch me on TikTok",
+     desc: "Short-form chaos, fresh daily.<br>Tap in \u2192 @xandrathecreative", btn: "Visit TikTok"},
+    {match: "Instagram", url: "https://www.instagram.com/xandrathecreative",
+     emoji: "\uD83D\uDCF8", title: "Visual magic on Instagram",
+     desc: "Behind-the-scenes, process vids,<br>finished pieces \u2192 @xandrathecreative", btn: "Visit Instagram"}
+  ];
+  // Also kill blocked countik iframes wherever they are
+  document.querySelectorAll('iframe[src*="countik.com"]').forEach(function(f){
+    var w = f.closest("div[class*=rounded]") || f.parentNode;
+    if (w) w.style.display = "none";
   });
-  // Instagram: stub renders nothing. Replace empty portal body with profile card.
-  var instaHead = document.evaluate("//h3[contains(text(),'Instagram Portal')]",
-    document, null, 9, null).singleNodeValue;
-  if (instaHead && !instaHead.dataset.fixed) {
-    instaHead.dataset.fixed = "1";
-    // Find the content container (sibling after the header block)
-    var headerBlock = instaHead.closest("div");
-    var contentDiv = headerBlock ? headerBlock.nextElementSibling : null;
-    if (contentDiv && contentDiv.textContent.trim().length < 50) {
-      contentDiv.innerHTML = '<a href="https://www.instagram.com/xandrathecreative" target="_blank" rel="noopener" ' +
-        'style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:40px 20px;text-align:center;text-decoration:none">' +
-        '<span style="font-size:48px">\uD83D\uDCF8</span>' +
-        '<span style="color:#fff;font-weight:700;font-size:16px">Visual magic on Instagram</span>' +
-        '<span style="color:#a78bfa;font-size:13px">Behind-the-scenes, process vids,<br>finished pieces \u2192 @xandrathecreative</span>' +
-        '<span style="margin-top:8px;padding:10px 28px;border-radius:999px;font-size:14px;font-weight:600;color:#fff;' +
-        'background:linear-gradient(90deg,#ec4899,#8b5cf6,#06b6d4)">Visit Instagram</span></a>';
+  portals.forEach(function(p){
+    var heads = document.evaluate(
+      "//h3[contains(text(),'" + p.match + "') or contains(text(),'" + p.match.toLowerCase() + "')]",
+      document, null, 7, null);
+    var h;
+    while ((h = heads.iterateNext())) {
+      if (h.dataset.xaFixed) continue;
+      // Walk up to find the card container, then find/create the body area
+      var card = h;
+      for (var k = 0; k < 6; k++) {
+        card = card.parentNode;
+        if (!card || card === document.body) break;
+        var cls = (card.className || "").toString();
+        if (/cosmic-card|rounded/.test(cls)) break;
+      }
+      if (!card || card === document.body) continue;
+      // The body is typically the last child div after the header
+      var kids = card.children;
+      var body = null;
+      for (var j = kids.length - 1; j >= 0; j--) {
+        var t = kids[j].textContent.trim();
+        if (t.length < 120 && kids[j].querySelector("h3") === null) { body = kids[j]; break; }
+      }
+      if (!body) {
+        body = document.createElement("div");
+        body.style.cssText = "border:1px solid rgba(168,85,247,.3);border-radius:8px;overflow:hidden;margin:0 16px 16px";
+        card.appendChild(body);
+      }
+      // Only replace if empty or contains blocked iframe
+      var hasBlocked = body.querySelector('iframe[src*="countik.com"]');
+      if (body.textContent.trim().length < 120 || hasBlocked) {
+        h.dataset.xaFixed = "1";
+        body.innerHTML = portalCard(p.url, p.emoji, p.title, p.desc, p.btn);
+      }
     }
-  }
+  });
 }
 
 /* ---------- Run everything (with retries for hydration) ---------- */
