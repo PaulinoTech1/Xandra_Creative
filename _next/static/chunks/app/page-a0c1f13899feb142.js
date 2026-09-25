@@ -10,6 +10,7 @@
 ;
 ;
 ;
+;
 ;/* Xandra bespoke layer: brand weave, micro-interactions, easter eggs, voice, Oscar, cosmos */
 (function(){
 "use strict";
@@ -390,11 +391,11 @@ function watchVoice(){
 
 /* ---------- Run everything (with retries for hydration) ---------- */
 function run(){
+  var ob = document.getElementById('xa-oscar'); if (ob) ob.remove();
   voicePass();
   if (!window.__xaWatched) { window.__xaWatched = 1; watchVoice(); }
   addDividers();
   addSignature();
-  addOscar();
   twinkle();
   dimHovers();
   molEgg();
