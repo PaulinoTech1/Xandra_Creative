@@ -87,16 +87,46 @@ function voicePass(){
 
 /* ---------- 4. Semi-colon dividers between major sections ---------- */
 function addDividers(){
-  // Add after each h2 section heading (except first)
-  var heads = document.querySelectorAll("h2");
-  heads.forEach(function(h, i){
+  // Place semi-colon dividers between major content sections.
+  // Strategy: find the main content column, insert dividers between its
+  // top-level section children.
+  if (document.querySelector(".xa-semicolon")) return; // already done
+  // Find candidate section containers: direct children of main content area
+  // that contain an h2 or h3 heading
+  var mains = document.querySelectorAll("main, [role='main']");
+  var scope = mains.length ? mains[0] : document.body;
+  // Collect block-level sections (cards/panels) in the main column
+  var sections = [];
+  var walker = document.createTreeWalker(scope, NodeFilter.SHOW_ELEMENT);
+  var el;
+  while (walker.nextNode()) {
+    el = walker.currentNode;
+    var tag = el.tagName.toLowerCase();
+    if ((tag === "h2" || tag === "h3") && el.offsetParent !== null) {
+      // Find the section container (walk up to a reasonable block)
+      var container = el;
+      // Go up at most 4 levels looking for a card-like container
+      for (var k = 0; k < 4; k++) {
+        var p = container.parentNode;
+        if (!p || p === scope || p === document.body) break;
+        container = p;
+        // Stop at something that looks like a card/panel
+        var cls = (container.className || "").toString();
+        if (/rounded|card|panel|section|backdrop/i.test(cls)) break;
+      }
+      if (sections.indexOf(container) === -1) sections.push(container);
+    }
+  }
+  // Insert dividers between sections (not before the first)
+  sections.forEach(function(sec, i){
     if (i === 0) return;
-    if (h.previousElementSibling && h.previousElementSibling.classList.contains("xa-semicolon")) return;
+    if (sec.previousElementSibling && sec.previousElementSibling.classList &&
+        sec.previousElementSibling.classList.contains("xa-semicolon")) return;
     var d = document.createElement("div");
     d.className = "xa-semicolon";
     d.setAttribute("aria-hidden", "true");
     d.innerHTML = "<span>;</span>";
-    h.parentNode.insertBefore(d, h);
+    sec.parentNode.insertBefore(d, sec);
   });
 }
 
