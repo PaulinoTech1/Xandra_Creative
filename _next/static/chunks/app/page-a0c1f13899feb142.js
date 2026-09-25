@@ -7,6 +7,7 @@
 ;
 ;
 ;
+;
 ;/* Xandra bespoke layer: brand weave, micro-interactions, easter eggs, voice, Oscar, cosmos */
 (function(){
 "use strict";
@@ -150,11 +151,10 @@ function addSignature(){
   var sig = document.createElement("div");
   sig.className = "xa-accept";
   sig.innerHTML = "Acceptance is free \u{1F9DA} <span style='opacity:.6'>#audhd</span>";
-  // Place after the Connected Dimensions card
+  // Place after the Connected Dimensions card: stamp ABOVE the signature text
   var card = dims.closest("div[class*='rounded']") || dims.parentNode;
   if (card && card.parentNode) {
-    card.parentNode.insertBefore(sig, card.nextSibling);
-    // Oscar Paw Approved stamp
+    // Oscar Paw Approved stamp (above the Acceptance text)
     if (!document.querySelector(".xa-paw-approved")) {
       var wrap = document.createElement("div");
       wrap.className = "xa-paw-wrap";
@@ -162,7 +162,10 @@ function addSignature(){
       stamp.className = "xa-paw-approved";
       stamp.innerHTML = "\u{1F43E} Oscar Paw Approved";
       wrap.appendChild(stamp);
-      card.parentNode.insertBefore(wrap, sig.nextSibling);
+      card.parentNode.insertBefore(wrap, card.nextSibling);
+      card.parentNode.insertBefore(sig, wrap.nextSibling);
+    } else {
+      card.parentNode.insertBefore(sig, card.nextSibling);
     }
   }
 }
