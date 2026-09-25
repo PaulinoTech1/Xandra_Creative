@@ -9,6 +9,7 @@
 ;
 ;
 ;
+;
 ;/* Xandra bespoke layer: brand weave, micro-interactions, easter eggs, voice, Oscar, cosmos */
 (function(){
 "use strict";
@@ -359,9 +360,38 @@ function fixPortals(){
   });
 }
 
+/* ---------- Instant voice-swap for late-injected content (popups/modals) ---------- */
+function watchVoice(){
+  if (!("MutationObserver" in window) || !document.body) return;
+  function swapNode(t){
+    var v = t.nodeValue;
+    if (!v || v.length > 300) return;
+    voice.forEach(function(pair){
+      if (v.indexOf(pair[0]) !== -1) v = v.split(pair[0]).join(pair[1]);
+    });
+    if (v !== t.nodeValue) t.nodeValue = v;
+  }
+  var obs = new MutationObserver(function(muts){
+    muts.forEach(function(m){
+      if (m.type === "characterData") { swapNode(m.target); return; }
+      m.addedNodes.forEach(function(n){
+        if (n.nodeType === 3) { swapNode(n); }
+        else if (n.nodeType === 1) {
+          var w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT);
+          var ns = [];
+          while (w.nextNode()) ns.push(w.currentNode);
+          ns.forEach(swapNode);
+        }
+      });
+    });
+  });
+  obs.observe(document.body, {childList: true, subtree: true, characterData: true});
+}
+
 /* ---------- Run everything (with retries for hydration) ---------- */
 function run(){
   voicePass();
+  if (!window.__xaWatched) { window.__xaWatched = 1; watchVoice(); }
   addDividers();
   addSignature();
   addOscar();
