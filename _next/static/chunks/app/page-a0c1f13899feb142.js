@@ -12,6 +12,7 @@
 ;
 ;
 ;
+;
 ;/* Xandra bespoke layer: brand weave, micro-interactions, easter eggs, voice, Oscar, cosmos */
 (function(){
 "use strict";
@@ -215,7 +216,9 @@ function timeOfDay(){
   var svg = document.querySelector('svg[aria-label="Dopamine molecule drawn as a constellation"]');
   if (!svg) return;
   svg.classList.add("xa-constellation");
-  var h = new Date().getHours();
+  // Fixed to Eastern Time for consistency (site's home timezone)
+  var h = parseInt(new Date().toLocaleString("en-US",
+    {timeZone: "America/New_York", hour: "numeric", hour12: false}), 10) % 24;
   var f = "";
   if (h >= 5 && h < 8) {
     f = "hue-rotate(-35deg) saturate(1.15)";       // dawn: warm gold-pink
