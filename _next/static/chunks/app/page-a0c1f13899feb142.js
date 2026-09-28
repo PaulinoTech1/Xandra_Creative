@@ -451,13 +451,21 @@ run();
   if (window.__xaGalaxy) return;
   window.__xaGalaxy = 1;
 
+  function mark(s){ try{ document.documentElement.setAttribute("data-xa-stage", s); }catch(e){} }
+  var bootTries = 0;
   function boot() {
+    bootTries++;
+    mark("boot-try" + bootTries + "-rs" + document.readyState + "-body" + (!!document.body));
     if (!document.body || !document.head) {
-      // DOM not parsed yet; try again shortly.
-      setTimeout(boot, 50);
+      if (bootTries < 200) setTimeout(boot, 50);
+      else mark("boot-gaveup");
       return;
     }
-    init();
+    try {
+      init();
+    } catch (err) {
+      mark("init-error:" + (err && err.message ? err.message : String(err)));
+    }
   }
 
   function init() {
@@ -486,6 +494,7 @@ run();
       document.head.appendChild(style);
     }
 
+    mark("init-css-done");
     /* ---------- Nebula blobs ---------- */
     ["xa-neb1", "xa-neb2", "xa-neb3"].forEach(function (id) {
       if (document.getElementById(id)) return;
@@ -495,6 +504,7 @@ run();
       document.body.appendChild(d);
     });
 
+    mark("init-nebula-done");
     /* ---------- Starfield canvas ---------- */
     var canvas = document.getElementById("xa-galaxy");
     if (!canvas) {
@@ -619,6 +629,7 @@ run();
     }
     start();
 
+    mark("init-canvas-done");
     /* ---------- Warp transition on internal navigation ---------- */
     if (!reduceMotion && !document.getElementById("xa-warp")) {
       var warp = document.createElement("div");
@@ -643,6 +654,7 @@ run();
         setTimeout(function () { location.href = url.href; }, 380);
       }, true);
     }
+    mark("init-done");
   }
 
   if (document.readyState === "loading") {
