@@ -31,11 +31,10 @@ background:
 /* Twinkling constellation stars */
 @keyframes xa-twinkle{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.55;transform:scale(.82)}}
 .xa-twinkle{animation:xa-twinkle 3s ease-in-out infinite;transform-origin:center;transform-box:fill-box}
-.xa-constellation{transition:filter 2s ease}
 /* Semi-colon section divider */
-.xa-semicolon{display:flex;align-items:center;gap:10px;margin:18px auto;max-width:420px;opacity:.4}
-.xa-semicolon::before,.xa-semicolon::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(168,85,247,.22),transparent)}
-.xa-semicolon span{font-size:13px;color:#a78bfa;font-weight:400;letter-spacing:1px}
+.xa-semicolon{display:flex;align-items:center;gap:12px;margin:28px auto;max-width:640px;opacity:.7}
+.xa-semicolon::before,.xa-semicolon::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(168,85,247,.4),transparent)}
+.xa-semicolon span{font-size:22px;color:#c084fc;font-weight:700;letter-spacing:2px}
 /* Connected Dimensions hover: each row gets a lift + glow */
 .xa-dim-row{transition:transform .25s ease, background .25s ease !important}
 .xa-dim-row:hover{transform:translateX(6px) scale(1.02);background:rgba(147,112,219,.12) !important;border-radius:8px}
@@ -51,8 +50,6 @@ background:
  display:flex;align-items:center;justify-content:center;font-size:13px}
 /* Acceptance signature */
 .xa-accept{font-size:11px;color:rgba(216,180,254,.55);text-align:center;margin-top:14px;letter-spacing:.3px}
-.xa-paw-approved{display:inline-block;margin:8px auto 0;padding:4px 14px;border:2px solid rgba(168,85,247,.55);border-radius:999px;color:#d8b4fe;font-size:13px;font-weight:600;letter-spacing:.04em;transform:rotate(-2deg);background:rgba(168,85,247,.08)}
-.xa-paw-wrap{text-align:center}
 /* Konami celebration */
 #xa-konami{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;
  background:rgba(10,5,25,.9);backdrop-filter:blur(4px);opacity:0;pointer-events:none;transition:opacity .4s}
@@ -60,6 +57,28 @@ background:
 #xa-konami .xa-card{text-align:center;padding:40px;max-width:420px}
 #xa-konami h2{font-size:28px;color:#f0abfc;margin-bottom:12px}
 #xa-konami p{color:#d8b4fe;font-size:14px;line-height:1.6}
+/* Chunk 3: Scroll entrance (fade/slide, once per visit) */
+.xa-pre{opacity:0;transform:translateY(26px);transition:opacity .7s ease,transform .7s cubic-bezier(.16,.8,.3,1)}
+.xa-in{opacity:1 !important;transform:none !important}
+/* Chunk 5: Custom scrollbar (thin, brand gradient) */
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:rgba(10,5,25,.85)}
+::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#ec4899,#8b5cf6,#06b6d4);border-radius:6px;border:2px solid rgba(10,5,25,.85)}
+::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#f0abfc,#a78bfa,#22d3ee)}
+html{scrollbar-width:thin;scrollbar-color:#8b5cf6 rgba(10,5,25,.85)}
+/* Chunk 5: Cosmos map */
+#xa-cosmos-map{position:fixed;bottom:16px;right:16px;z-index:50;background:rgba(15,10,30,.9);
+ backdrop-filter:blur(8px);border:1px solid rgba(168,85,247,.35);border-radius:12px;
+ padding:10px 12px;font-size:11px;color:#d8b4fe;box-shadow:0 4px 20px rgba(147,112,219,.25);max-width:200px}
+#xa-cosmos-map .xa-map-head{display:flex;justify-content:space-between;align-items:center;cursor:pointer;
+ font-weight:700;letter-spacing:1.5px;font-size:10px;color:#c084fc;margin-bottom:8px;user-select:none}
+#xa-cosmos-map .xa-map-nodes{display:flex;flex-direction:column;gap:2px}
+#xa-cosmos-map a{display:flex;align-items:center;gap:8px;color:#d8b4fe;text-decoration:none;
+ padding:5px 6px;border-radius:6px;transition:background .2s}
+#xa-cosmos-map a:hover{background:rgba(147,112,219,.15)}
+#xa-cosmos-map a.xa-cur{background:rgba(147,112,219,.25);color:#fff;font-weight:600}
+#xa-cosmos-map.xa-collapsed .xa-map-nodes{display:none}
+#xa-cosmos-map.xa-collapsed .xa-map-head{margin-bottom:0}
 `;
 var st = document.createElement("style");
 st.textContent = css;
@@ -138,9 +157,6 @@ function addDividers(){
   // Insert dividers between sections (not before the first)
   sections.forEach(function(sec, i){
     if (i === 0) return;
-    // Skip merch/popup areas: no divider near "Snag the goods" or merch triggers
-    var txt = (sec.textContent || "").toLowerCase();
-    if (/snag the goods|merch|etsy shop/.test(txt)) return;
     if (sec.previousElementSibling && sec.previousElementSibling.classList &&
         sec.previousElementSibling.classList.contains("xa-semicolon")) return;
     var d = document.createElement("div");
@@ -160,76 +176,21 @@ function addSignature(){
   var sig = document.createElement("div");
   sig.className = "xa-accept";
   sig.innerHTML = "Acceptance is free \u{1F9DA} <span style='opacity:.6'>#audhd</span>";
-  // Place after the Connected Dimensions card: stamp ABOVE the signature text
+  // Place after the Connected Dimensions card
   var card = dims.closest("div[class*='rounded']") || dims.parentNode;
   if (card && card.parentNode) {
-    // Oscar Paw Approved stamp (above the Acceptance text)
-    if (!document.querySelector(".xa-paw-approved")) {
-      var wrap = document.createElement("div");
-      wrap.className = "xa-paw-wrap";
-      var stamp = document.createElement("span");
-      stamp.className = "xa-paw-approved";
-      stamp.innerHTML = "\u{1F43E} Oscar Paw Approved";
-      wrap.appendChild(stamp);
-      card.parentNode.insertBefore(wrap, card.nextSibling);
-      card.parentNode.insertBefore(sig, wrap.nextSibling);
-    } else {
-      card.parentNode.insertBefore(sig, card.nextSibling);
-    }
+    card.parentNode.insertBefore(sig, card.nextSibling);
   }
 }
 
 /* ---------- 6. Oscar: Studio Supervisor badge ---------- */
-var xaQuips = [
-  "Quality control. Nap schedule strictly enforced.",
-  "Approved this section. Smelled it first.",
-  "Supervising. Do not disturb.",
-  "Treats accepted as payment for approval.",
-  "I saw you scroll past. Rude."
-];
-var xaQuipIdx = 0;
 function addOscar(){
   if (document.getElementById("xa-oscar")) return;
   var b = document.createElement("div");
   b.id = "xa-oscar";
-  b.title = xaQuips[0];
+  b.title = "Quality control. Nap schedule strictly enforced.";
   b.innerHTML = '<span class="xa-paw">\u{1F43E}</span><span>Oscar &middot; Studio Supervisor</span>';
   document.body.appendChild(b);
-  // Rotate quips every 30 seconds
-  setInterval(function(){
-    xaQuipIdx = (xaQuipIdx + 1) % xaQuips.length;
-    b.title = xaQuips[xaQuipIdx];
-  }, 30000);
-  // Cycle on click too
-  b.style.cursor = "pointer";
-  b.addEventListener("click", function(){
-    xaQuipIdx = (xaQuipIdx + 1) % xaQuips.length;
-    b.title = xaQuips[xaQuipIdx];
-    // Brief bounce
-    b.style.transform = "scale(1.15)";
-    setTimeout(function(){ b.style.transform = ""; }, 200);
-  });
-}
-
-/* ---------- 6b. Time-of-day constellation colors ---------- */
-function timeOfDay(){
-  var svg = document.querySelector('svg[aria-label="Dopamine molecule drawn as a constellation"]');
-  if (!svg) return;
-  svg.classList.add("xa-constellation");
-  // Fixed to Eastern Time for consistency (site's home timezone)
-  var h = parseInt(new Date().toLocaleString("en-US",
-    {timeZone: "America/New_York", hour: "numeric", hour12: false}), 10) % 24;
-  var f = "";
-  if (h >= 5 && h < 8) {
-    f = "hue-rotate(-35deg) saturate(1.15)";       // dawn: warm gold-pink
-  } else if (h >= 8 && h < 17) {
-    f = "";                                        // day: default palette
-  } else if (h >= 17 && h < 21) {
-    f = "hue-rotate(35deg) saturate(1.25)";        // dusk: deep magenta-violet
-  } else {
-    f = "hue-rotate(85deg) brightness(1.08) saturate(1.1)"; // night: cool cyan-blue
-  }
-  if (svg.style.filter !== f) svg.style.filter = f;
 }
 
 /* ---------- 7. Twinkle the constellation stars ---------- */
@@ -324,7 +285,7 @@ function molEgg(){
 
 /* ---------- 12. Fix broken TikTok/Instagram portals ---------- */
 function portalCard(url, emoji, title, desc, btn){
-  return '<a href="' + url + '" target="_blank" rel="noopener" data-xa-card="1" ' +
+  return '<a href="' + url + '" target="_blank" rel="noopener" data-xa-card="1" data-xa-mag="1" ' +
     'style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:40px 20px;text-align:center;text-decoration:none">' +
     '<span style="font-size:48px">' + emoji + '</span>' +
     '<span style="color:#fff;font-weight:700;font-size:16px">' + title + '</span>' +
@@ -385,56 +346,146 @@ function fixPortals(){
   });
 }
 
-/* ---------- Instant voice-swap for late-injected content (popups/modals) ---------- */
-function watchVoice(){
-  if (!("MutationObserver" in window) || !document.body) return;
-  function swapNode(t){
-    var v = t.nodeValue;
-    if (!v || v.length > 300) return;
-    voice.forEach(function(pair){
-      if (v.indexOf(pair[0]) !== -1) v = v.split(pair[0]).join(pair[1]);
-    });
-    if (v !== t.nodeValue) t.nodeValue = v;
-  }
-  var obs = new MutationObserver(function(muts){
-    muts.forEach(function(m){
-      if (m.type === "characterData") { swapNode(m.target); return; }
-      m.addedNodes.forEach(function(n){
-        if (n.nodeType === 3) { swapNode(n); }
-        else if (n.nodeType === 1) {
-          var w = document.createTreeWalker(n, NodeFilter.SHOW_TEXT);
-          var ns = [];
-          while (w.nextNode()) ns.push(w.currentNode);
-          ns.forEach(swapNode);
-        }
-      });
-    });
+/* ---------- Run everything (with retries for hydration) ---------- */
+/* Shared helpers */
+var xaReduceMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+var xaIsTouch = ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
+
+/* ---------- Chunk 3: Scroll entrance animations (fade/slide, staggered, once) ---------- */
+var xaIO = null;
+var xaEnterN = 0;
+function scrollEntrances(){
+  if (xaReduceMotion) return;
+  // Safety: force-show anything stuck hidden for 8s+
+  var now = Date.now();
+  document.querySelectorAll(".xa-pre").forEach(function(el){
+    var t = parseInt(el.dataset.xaPreT || "0", 10);
+    if (t && now - t > 8000) {
+      el.classList.add("xa-in");
+      if (xaIO) xaIO.unobserve(el);
+    }
   });
-  obs.observe(document.body, {childList: true, subtree: true, characterData: true});
+  if (!("IntersectionObserver" in window)) {
+    document.querySelectorAll(".xa-pre").forEach(function(el){ el.classList.add("xa-in"); });
+    return;
+  }
+  if (!xaIO) {
+    xaIO = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if (!en.isIntersecting) return;
+        var el = en.target;
+        xaIO.unobserve(el);
+        var d = (xaEnterN++ % 4) * 90;
+        el.style.transitionDelay = d + "ms";
+        requestAnimationFrame(function(){ el.classList.add("xa-in"); });
+        setTimeout(function(){
+          el.classList.remove("xa-pre");
+          el.classList.remove("xa-in");
+          el.style.transitionDelay = "";
+        }, 950 + d);
+      });
+    }, {threshold: 0.1, rootMargin: "0px 0px -30px 0px"});
+  }
+  document.querySelectorAll(".cosmic-card").forEach(function(el){
+    if (el.dataset.xaObs) return;
+    if (window.getComputedStyle(el).position === "fixed") return;
+    el.dataset.xaObs = "1";
+    el.dataset.xaPreT = String(Date.now());
+    el.classList.add("xa-pre");
+    xaIO.observe(el);
+  });
 }
 
-/* ---------- Run everything (with retries for hydration) ---------- */
+/* ---------- Chunk 4: Card tilt + magnetic buttons ---------- */
+function tiltCards(){
+  if (xaReduceMotion || xaIsTouch) return;
+  document.querySelectorAll(".cosmic-card").forEach(function(card){
+    if (card.dataset.xaTilt) return;
+    if (window.getComputedStyle(card).position === "fixed") return;
+    card.dataset.xaTilt = "1";
+    card.style.transition = "transform .2s ease-out";
+    card.addEventListener("mousemove", function(e){
+      if (card.classList.contains("xa-pre")) return;
+      var r = card.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      var px = (e.clientX - r.left) / r.width - 0.5;
+      var py = (e.clientY - r.top) / r.height - 0.5;
+      card.style.transform = "perspective(900px) rotateX(" + (-py * 7).toFixed(2) +
+        "deg) rotateY(" + (px * 9).toFixed(2) + "deg)";
+    });
+    card.addEventListener("mouseleave", function(){ card.style.transform = ""; });
+  });
+}
+function magneticButtons(){
+  if (xaReduceMotion || xaIsTouch) return;
+  document.querySelectorAll("button, a[data-xa-mag]").forEach(function(btn){
+    if (btn.dataset.xaMagDone) return;
+    btn.dataset.xaMagDone = "1";
+    if (window.getComputedStyle(btn).display === "inline") btn.style.display = "inline-block";
+    btn.style.transition = "transform .18s ease-out";
+    btn.addEventListener("mousemove", function(e){
+      var r = btn.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      var dx = e.clientX - (r.left + r.width / 2);
+      var dy = e.clientY - (r.top + r.height / 2);
+      var mx = Math.max(-6, Math.min(6, dx * 0.2));
+      var my = Math.max(-6, Math.min(6, dy * 0.2));
+      btn.style.transform = "translate(" + mx.toFixed(1) + "px," + my.toFixed(1) + "px)";
+    });
+    btn.addEventListener("mouseleave", function(){ btn.style.transform = ""; });
+  });
+}
+
+/* ---------- Chunk 5: Cosmos map ---------- */
+function cosmosMap(){
+  if (document.getElementById("xa-cosmos-map")) return;
+  var path = location.pathname;
+  var regions = [
+    {name: "The Studio", url: "/", emoji: "\u2728", cur: path === "/" || path === "/index.html"},
+    {name: "TikTok Dimension", url: "https://www.tiktok.com/@xandrathecreative", emoji: "\uD83C\uDFB5", ext: true},
+    {name: "Instagram Dimension", url: "https://www.instagram.com/xandrathecreative", emoji: "\uD83D\uDCF8", ext: true},
+    {name: "The Other Side", url: "/the-other-side", emoji: "\uD83C\uDF0C", cur: path.indexOf("/the-other-side") === 0},
+    {name: "The Cafe", url: "/space-cafe", emoji: "\u2615", cur: path.indexOf("/space-cafe") === 0}
+  ];
+  var nodes = regions.map(function(r){
+    return '<a href="' + r.url + '"' +
+      (r.ext ? ' target="_blank" rel="noopener"' : "") +
+      (r.cur ? ' class="xa-cur"' : "") +
+      '><span>' + r.emoji + '</span><span>' + r.name + "</span></a>";
+  }).join("");
+  var div = document.createElement("div");
+  div.id = "xa-cosmos-map";
+  div.innerHTML = '<div class="xa-map-head"><span>\uD83D\uDDFA COSMOS MAP</span><span id="xa-map-toggle">\u2212</span></div>' +
+    '<div class="xa-map-nodes">' + nodes + "</div>";
+  document.body.appendChild(div);
+  div.querySelector(".xa-map-head").addEventListener("click", function(){
+    var collapsed = div.classList.toggle("xa-collapsed");
+    document.getElementById("xa-map-toggle").textContent = collapsed ? "+" : "\u2212";
+  });
+}
+
 function run(){
-  var ob = document.getElementById('xa-oscar'); if (ob) ob.remove();
   voicePass();
-  timeOfDay();
-  if (!window.__xaWatched) { window.__xaWatched = 1; watchVoice(); }
   addDividers();
   addSignature();
+  addOscar();
   twinkle();
   dimHovers();
   molEgg();
   fixPortals();
+  scrollEntrances();
+  tiltCards();
+  magneticButtons();
+  cosmosMap();
 }
 var attempts = 0;
 var timer = setInterval(function(){
   run();
   if (++attempts > 24) clearInterval(timer);
 }, 500);
-setInterval(timeOfDay, 30 * 60 * 1000);
 run();
 })();
-;
+
 /* ============================================================
    Xandra galaxy layer: mysterious galaxy traversal
    Standalone IIFE. Injected into every page chunk.
@@ -691,4 +742,3 @@ run();
     boot();
   }
 })();
-

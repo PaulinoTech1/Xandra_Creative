@@ -42,6 +42,28 @@ background:
 #xa-konami .xa-card{text-align:center;padding:40px;max-width:420px}
 #xa-konami h2{font-size:28px;color:#f0abfc;margin-bottom:12px}
 #xa-konami p{color:#d8b4fe;font-size:14px;line-height:1.6}
+/* Chunk 3: Scroll entrance (fade/slide, once per visit) */
+.xa-pre{opacity:0;transform:translateY(26px);transition:opacity .7s ease,transform .7s cubic-bezier(.16,.8,.3,1)}
+.xa-in{opacity:1 !important;transform:none !important}
+/* Chunk 5: Custom scrollbar (thin, brand gradient) */
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:rgba(10,5,25,.85)}
+::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#ec4899,#8b5cf6,#06b6d4);border-radius:6px;border:2px solid rgba(10,5,25,.85)}
+::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#f0abfc,#a78bfa,#22d3ee)}
+html{scrollbar-width:thin;scrollbar-color:#8b5cf6 rgba(10,5,25,.85)}
+/* Chunk 5: Cosmos map */
+#xa-cosmos-map{position:fixed;bottom:16px;right:16px;z-index:50;background:rgba(15,10,30,.9);
+ backdrop-filter:blur(8px);border:1px solid rgba(168,85,247,.35);border-radius:12px;
+ padding:10px 12px;font-size:11px;color:#d8b4fe;box-shadow:0 4px 20px rgba(147,112,219,.25);max-width:200px}
+#xa-cosmos-map .xa-map-head{display:flex;justify-content:space-between;align-items:center;cursor:pointer;
+ font-weight:700;letter-spacing:1.5px;font-size:10px;color:#c084fc;margin-bottom:8px;user-select:none}
+#xa-cosmos-map .xa-map-nodes{display:flex;flex-direction:column;gap:2px}
+#xa-cosmos-map a{display:flex;align-items:center;gap:8px;color:#d8b4fe;text-decoration:none;
+ padding:5px 6px;border-radius:6px;transition:background .2s}
+#xa-cosmos-map a:hover{background:rgba(147,112,219,.15)}
+#xa-cosmos-map a.xa-cur{background:rgba(147,112,219,.25);color:#fff;font-weight:600}
+#xa-cosmos-map.xa-collapsed .xa-map-nodes{display:none}
+#xa-cosmos-map.xa-collapsed .xa-map-head{margin-bottom:0}
 `;
 var st = document.createElement("style");
 st.textContent = css;
@@ -248,7 +270,7 @@ function molEgg(){
 
 /* ---------- 12. Fix broken TikTok/Instagram portals ---------- */
 function portalCard(url, emoji, title, desc, btn){
-  return '<a href="' + url + '" target="_blank" rel="noopener" data-xa-card="1" ' +
+  return '<a href="' + url + '" target="_blank" rel="noopener" data-xa-card="1" data-xa-mag="1" ' +
     'style="display:flex;flex-direction:column;align-items:center;gap:12px;padding:40px 20px;text-align:center;text-decoration:none">' +
     '<span style="font-size:48px">' + emoji + '</span>' +
     '<span style="color:#fff;font-weight:700;font-size:16px">' + title + '</span>' +
@@ -310,6 +332,123 @@ function fixPortals(){
 }
 
 /* ---------- Run everything (with retries for hydration) ---------- */
+/* Shared helpers */
+var xaReduceMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+var xaIsTouch = ("ontouchstart" in window) || (navigator.maxTouchPoints > 0);
+
+/* ---------- Chunk 3: Scroll entrance animations (fade/slide, staggered, once) ---------- */
+var xaIO = null;
+var xaEnterN = 0;
+function scrollEntrances(){
+  if (xaReduceMotion) return;
+  // Safety: force-show anything stuck hidden for 8s+
+  var now = Date.now();
+  document.querySelectorAll(".xa-pre").forEach(function(el){
+    var t = parseInt(el.dataset.xaPreT || "0", 10);
+    if (t && now - t > 8000) {
+      el.classList.add("xa-in");
+      if (xaIO) xaIO.unobserve(el);
+    }
+  });
+  if (!("IntersectionObserver" in window)) {
+    document.querySelectorAll(".xa-pre").forEach(function(el){ el.classList.add("xa-in"); });
+    return;
+  }
+  if (!xaIO) {
+    xaIO = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if (!en.isIntersecting) return;
+        var el = en.target;
+        xaIO.unobserve(el);
+        var d = (xaEnterN++ % 4) * 90;
+        el.style.transitionDelay = d + "ms";
+        requestAnimationFrame(function(){ el.classList.add("xa-in"); });
+        setTimeout(function(){
+          el.classList.remove("xa-pre");
+          el.classList.remove("xa-in");
+          el.style.transitionDelay = "";
+        }, 950 + d);
+      });
+    }, {threshold: 0.1, rootMargin: "0px 0px -30px 0px"});
+  }
+  document.querySelectorAll(".cosmic-card").forEach(function(el){
+    if (el.dataset.xaObs) return;
+    if (window.getComputedStyle(el).position === "fixed") return;
+    el.dataset.xaObs = "1";
+    el.dataset.xaPreT = String(Date.now());
+    el.classList.add("xa-pre");
+    xaIO.observe(el);
+  });
+}
+
+/* ---------- Chunk 4: Card tilt + magnetic buttons ---------- */
+function tiltCards(){
+  if (xaReduceMotion || xaIsTouch) return;
+  document.querySelectorAll(".cosmic-card").forEach(function(card){
+    if (card.dataset.xaTilt) return;
+    if (window.getComputedStyle(card).position === "fixed") return;
+    card.dataset.xaTilt = "1";
+    card.style.transition = "transform .2s ease-out";
+    card.addEventListener("mousemove", function(e){
+      if (card.classList.contains("xa-pre")) return;
+      var r = card.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      var px = (e.clientX - r.left) / r.width - 0.5;
+      var py = (e.clientY - r.top) / r.height - 0.5;
+      card.style.transform = "perspective(900px) rotateX(" + (-py * 7).toFixed(2) +
+        "deg) rotateY(" + (px * 9).toFixed(2) + "deg)";
+    });
+    card.addEventListener("mouseleave", function(){ card.style.transform = ""; });
+  });
+}
+function magneticButtons(){
+  if (xaReduceMotion || xaIsTouch) return;
+  document.querySelectorAll("button, a[data-xa-mag]").forEach(function(btn){
+    if (btn.dataset.xaMagDone) return;
+    btn.dataset.xaMagDone = "1";
+    if (window.getComputedStyle(btn).display === "inline") btn.style.display = "inline-block";
+    btn.style.transition = "transform .18s ease-out";
+    btn.addEventListener("mousemove", function(e){
+      var r = btn.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      var dx = e.clientX - (r.left + r.width / 2);
+      var dy = e.clientY - (r.top + r.height / 2);
+      var mx = Math.max(-6, Math.min(6, dx * 0.2));
+      var my = Math.max(-6, Math.min(6, dy * 0.2));
+      btn.style.transform = "translate(" + mx.toFixed(1) + "px," + my.toFixed(1) + "px)";
+    });
+    btn.addEventListener("mouseleave", function(){ btn.style.transform = ""; });
+  });
+}
+
+/* ---------- Chunk 5: Cosmos map ---------- */
+function cosmosMap(){
+  if (document.getElementById("xa-cosmos-map")) return;
+  var path = location.pathname;
+  var regions = [
+    {name: "The Studio", url: "/", emoji: "\u2728", cur: path === "/" || path === "/index.html"},
+    {name: "TikTok Dimension", url: "https://www.tiktok.com/@xandrathecreative", emoji: "\uD83C\uDFB5", ext: true},
+    {name: "Instagram Dimension", url: "https://www.instagram.com/xandrathecreative", emoji: "\uD83D\uDCF8", ext: true},
+    {name: "The Other Side", url: "/the-other-side", emoji: "\uD83C\uDF0C", cur: path.indexOf("/the-other-side") === 0},
+    {name: "The Cafe", url: "/space-cafe", emoji: "\u2615", cur: path.indexOf("/space-cafe") === 0}
+  ];
+  var nodes = regions.map(function(r){
+    return '<a href="' + r.url + '"' +
+      (r.ext ? ' target="_blank" rel="noopener"' : "") +
+      (r.cur ? ' class="xa-cur"' : "") +
+      '><span>' + r.emoji + '</span><span>' + r.name + "</span></a>";
+  }).join("");
+  var div = document.createElement("div");
+  div.id = "xa-cosmos-map";
+  div.innerHTML = '<div class="xa-map-head"><span>\uD83D\uDDFA COSMOS MAP</span><span id="xa-map-toggle">\u2212</span></div>' +
+    '<div class="xa-map-nodes">' + nodes + "</div>";
+  document.body.appendChild(div);
+  div.querySelector(".xa-map-head").addEventListener("click", function(){
+    var collapsed = div.classList.toggle("xa-collapsed");
+    document.getElementById("xa-map-toggle").textContent = collapsed ? "+" : "\u2212";
+  });
+}
+
 function run(){
   voicePass();
   addDividers();
@@ -319,6 +458,10 @@ function run(){
   dimHovers();
   molEgg();
   fixPortals();
+  scrollEntrances();
+  tiltCards();
+  magneticButtons();
+  cosmosMap();
 }
 var attempts = 0;
 var timer = setInterval(function(){
