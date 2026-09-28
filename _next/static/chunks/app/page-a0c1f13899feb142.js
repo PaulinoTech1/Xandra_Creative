@@ -509,10 +509,10 @@ run();
     if (!document.getElementById("xa-galaxy-css")) {
       var css = [
         "#xa-galaxy{position:fixed;inset:0;z-index:-1;pointer-events:none;}",
-        ".xa-nebula{position:fixed;border-radius:9999px;filter:blur(90px);z-index:-1;pointer-events:none;opacity:.22;}",
-        "#xa-neb1{width:52vw;height:52vw;left:-14vw;top:-10vw;background:radial-gradient(circle,rgba(139,92,246,.55),transparent 70%);}",
-        "#xa-neb2{width:44vw;height:44vw;right:-12vw;top:30vh;background:radial-gradient(circle,rgba(34,211,238,.38),transparent 70%);}",
-        "#xa-neb3{width:48vw;height:48vw;left:22vw;bottom:-16vw;background:radial-gradient(circle,rgba(232,121,249,.34),transparent 70%);}",
+        ".xa-nebula{position:fixed;border-radius:9999px;filter:blur(90px);z-index:-1;pointer-events:none;opacity:.34;}",
+        "#xa-neb1{width:52vw;height:52vw;left:-14vw;top:-10vw;background:radial-gradient(circle,rgba(139,92,246,.75),transparent 70%);}",
+        "#xa-neb2{width:44vw;height:44vw;right:-12vw;top:30vh;background:radial-gradient(circle,rgba(34,211,238,.55),transparent 70%);}",
+        "#xa-neb3{width:48vw;height:48vw;left:22vw;bottom:-16vw;background:radial-gradient(circle,rgba(232,121,249,.5),transparent 70%);}",
         (reduceMotion ? "" : ".xa-nebula{animation:xa-drift 70s ease-in-out infinite alternate;}"),
         (reduceMotion ? "" : "#xa-neb2{animation-duration:95s;}#xa-neb3{animation-duration:120s;}"),
         "@keyframes xa-drift{from{transform:translate3d(0,0,0) scale(1);}to{transform:translate3d(6vw,-4vh,0) scale(1.15);}}",
@@ -579,13 +579,13 @@ run();
 
     function seed() {
       stars = [];
-      var n = Math.floor((W * H) / 6500);
+      var n = Math.floor((W * H) / 4200);
       for (var i = 0; i < n; i++) {
         var depth = Math.random();
         stars.push({
           x: Math.random() * W,
           y: Math.random() * H,
-          r: 0.4 + depth * 1.6,
+          r: 0.5 + depth * 1.8,
           // depth: 0 = far (slow, dim), 1 = near (fast, bright)
           depth: depth,
           tw: Math.random() * Math.PI * 2,
@@ -627,7 +627,7 @@ run();
         var py = (s.y + t * 0.7 * s.depth - scrollY * 0.12 * s.depth) % H;
         if (py < 0) py += H;
         var tw = reduceMotion ? 0.85 : (0.55 + 0.45 * Math.sin(s.tw + t * s.twSpeed));
-        var a = (0.25 + 0.65 * s.depth) * tw;
+        var a = (0.45 + 0.55 * s.depth) * tw;
         ctx.fillStyle = starColor(s, a.toFixed(3));
         ctx.beginPath();
         ctx.arc(px, py, s.r, 0, 6.2832);
