@@ -702,6 +702,23 @@ run();
     init();
   }
 
+  /* If WebGL touched the canvas, 2D fallback needs a fresh element. */
+  function freshCanvasFor2D() {
+    var old = document.getElementById("xa-galaxy");
+    if (!old) return null;
+    var nu = document.createElement("canvas");
+    nu.id = "xa-galaxy";
+    old.parentNode.replaceChild(nu, old);
+    return nu;
+  }
+
+  function degradeTo2D(reduceMotion) {
+    try { if (bgHandle && bgHandle.dispose) bgHandle.dispose(); } catch (e) {}
+    bgHandle = null;
+    freshCanvasFor2D();
+    startFallback2D(reduceMotion);
+  }
+
   function ensureImportMap() {
     if (document.querySelector('script[type="importmap"]')) return;
     var im = document.createElement("script");
@@ -728,7 +745,7 @@ run();
       var timedOut = false;
       var timer = setTimeout(function () {
         timedOut = true;
-        if (!bgHandle && !fallbackRunning) startFallback2D(reduceMotion);
+        if (!bgHandle && !fallbackRunning) degradeTo2D(reduceMotion);
       }, 15000);
       try {
         ensureImportMap();
@@ -738,22 +755,25 @@ run();
         )().then(function (m) {
           if (timedOut || !m || !m.initGalaxy) throw new Error("bad module");
           var canvas = document.getElementById("xa-galaxy");
-          return m.initGalaxy(canvas, { reduceMotion: reduceMotion });
+          return m.initGalaxy(canvas, {
+            reduceMotion: reduceMotion,
+            onSlow: function () { degradeTo2D(reduceMotion); }
+          });
         }).then(function (handle) {
           clearTimeout(timer);
           if (timedOut) { try { handle.dispose(); } catch (e) {} return; }
           if (handle && handle.ok) {
             bgHandle = handle;
           } else {
-            startFallback2D(reduceMotion);
+            degradeTo2D(reduceMotion);
           }
         }).catch(function () {
           clearTimeout(timer);
-          if (!timedOut) startFallback2D(reduceMotion);
+          if (!timedOut) degradeTo2D(reduceMotion);
         });
       } catch (e) {
         clearTimeout(timer);
-        startFallback2D(reduceMotion);
+        degradeTo2D(reduceMotion);
       }
     } else {
       startFallback2D(reduceMotion);

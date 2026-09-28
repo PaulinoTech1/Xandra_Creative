@@ -1,330 +1,95 @@
 /* ============================================================
-   Xandra WebGPU galaxy background
-   Adapted from dgreenheck/webgpu-galaxy (MIT License)
-   - Three.js TSL compute-shader spiral galaxy
-   - Tuned for background use: 20K stars, no bloom, no controls
+   Xandra WebGPU galaxy background (v2: robust CPU-geometry build)
+   Inspired by dgreenheck/webgpu-galaxy (MIT License)
+   - Spiral galaxy positions generated on CPU (same math as ref)
+   - Differential rotation applied per-frame on CPU (20K pts ~ trivial)
+   - Three.js WebGPU renderer, TSL twinkle shader
    - Brand palette: purple core -> cyan edges
-   - Per-star twinkle, differential rotation, scroll parallax
-   - Exposes initGalaxy(canvas, opts) -> Promise<boolean>
+   - Scroll parallax via camera, FPS auto-degrade to 2D fallback
+   - Exposes initGalaxy(canvas, opts) -> Promise<handle|false>
+     opts: {reduceMotion, onSlow} -- onSlow() called if FPS is poor
    ============================================================ */
 import * as THREE from 'three/webgpu';
 import {
   uniform,
-  instancedArray,
-  instanceIndex,
-  vec3,
   vec4,
   float,
   Fn,
-  mix,
-  length,
   sin,
-  cos,
   uv,
+  length,
   smoothstep,
-  fract,
-  texture
+  attribute
 } from 'three/tsl';
 
-/* ---------------- TSL helpers (from webgpu-galaxy helpers.js, MIT) ---------------- */
-const hash = Fn(([seed]) => {
-  const p = fract(seed.mul(0.1031));
-  const h = p.add(19.19);
-  const x = fract(h.mul(h.add(47.43)).mul(p));
-  return x;
-});
-
-const rotateXZ = Fn(([position, angle]) => {
-  const cosTheta = cos(angle);
-  const sinTheta = sin(angle);
-  const newX = position.x.mul(cosTheta).sub(position.z.mul(sinTheta));
-  const newZ = position.x.mul(sinTheta).add(position.z.mul(cosTheta));
-  return vec3(newX, position.y, newZ);
-});
-
-const applyDifferentialRotation = Fn(([position, rotationSpeed, deltaTime]) => {
-  const distFromCenter = length(vec3(position.x, 0, position.z));
-  const rotationFactor = float(1.0).div(distFromCenter.mul(0.1).add(1.0));
-  const angularSpeed = rotationSpeed.mul(rotationFactor).mul(deltaTime).negate();
-  return rotateXZ(position, angularSpeed);
-});
-
-const applySpringForce = Fn(([currentPos, targetPos, strength, deltaTime]) => {
-  const toTarget = targetPos.sub(currentPos);
-  return toTarget.mul(strength).mul(deltaTime);
-});
-
-/* ---------------- Config (background-tuned) ---------------- */
 const CONFIG = {
   starCount: 20000,
-  rotationSpeed: 0.12,
+  rotationSpeed: 0.10,          // base angular speed (rad/sec at center)
   spiralTightness: 1.25,
   galaxyRadius: 14.0,
   galaxyThickness: 2.6,
   armCount: 2,
   armWidth: 2.1,
   randomness: 1.7,
-  particleSize: 0.055,
-  starBrightness: 0.75,
-  denseStarColor: '#c084fc',   // purple core
-  sparseStarColor: '#67e8f9',  // cyan edges
-  cloudCount: 1200,
-  cloudSize: 2.6,
-  cloudOpacity: 0.05,
+  pointSize: 2.6,               // px base size (scaled by DPR)
+  starBrightness: 0.85,
+  denseStarColor: '#c084fc',    // purple core
+  sparseStarColor: '#67e8f9',   // cyan edges
+  cloudCount: 900,
+  cloudSize: 26,                // px
+  cloudOpacity: 0.055,
   cloudTintColor: '#a855f7',
-  bgStarCount: 2200
+  bgStarCount: 1800
 };
 
-/* ---------------- Galaxy simulation (simplified from webgpu-galaxy galaxy.js) ---------------- */
-class BgGalaxy {
-  constructor(scene, config) {
-    this.scene = scene;
-    this.config = config;
-    this.COUNT = config.starCount;
-    this.uniforms = {
-      compute: {
-        time: uniform(0),
-        deltaTime: uniform(0.016),
-        rotationSpeed: uniform(config.rotationSpeed)
-      },
-      galaxy: {
-        radius: uniform(config.galaxyRadius),
-        thickness: uniform(config.galaxyThickness),
-        spiralTightness: uniform(config.spiralTightness),
-        armCount: uniform(config.armCount),
-        armWidth: uniform(config.armWidth),
-        randomness: uniform(config.randomness)
-      },
-      visual: {
-        particleSize: uniform(config.particleSize),
-        cloudSize: uniform(config.cloudSize),
-        cloudOpacity: uniform(config.cloudOpacity),
-        starBrightness: uniform(config.starBrightness),
-        denseStarColor: uniform(new THREE.Color(config.denseStarColor)),
-        sparseStarColor: uniform(new THREE.Color(config.sparseStarColor)),
-        cloudTintColor: uniform(new THREE.Color(config.cloudTintColor))
-      }
-    };
-    this.initialized = false;
-    this.cloudInitialized = false;
+/* Generate spiral galaxy on CPU. Returns {positions, colors, phases, radii}. */
+function generateSpiral(count, cfg) {
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const phases = new Float32Array(count);
+  const radii = new Float32Array(count);
+  const dense = new THREE.Color(cfg.denseStarColor);
+  const sparse = new THREE.Color(cfg.sparseStarColor);
+  const tmp = new THREE.Color();
+  for (let i = 0; i < count; i++) {
+    const radius = Math.pow(Math.random(), 0.5) * cfg.galaxyRadius;
+    const nr = radius / cfg.galaxyRadius;
+    const armIndex = Math.floor(Math.random() * cfg.armCount);
+    const armAngle = (armIndex / cfg.armCount) * Math.PI * 2;
+    const spiralAngle = nr * cfg.spiralTightness * Math.PI * 2;
+    const angleOffset = (Math.random() - 0.5) * cfg.randomness;
+    const radiusOffset = (Math.random() - 0.5) * cfg.armWidth;
+    const angle = armAngle + spiralAngle + angleOffset;
+    const r = Math.max(radius + radiusOffset, 0.05);
+    const x = Math.cos(angle) * r;
+    const z = Math.sin(angle) * r;
+    const thicknessFactor = (1.0 - nr) + 0.2;
+    const y = (Math.random() - 0.5) * cfg.galaxyThickness * thicknessFactor;
+    positions[i * 3] = x;
+    positions[i * 3 + 1] = y;
+    positions[i * 3 + 2] = z;
+    radii[i] = Math.sqrt(x * x + z * z);
+    const radialSparsity = Math.abs(radiusOffset) / (cfg.armWidth * 0.5 + 0.01);
+    const angularSparsity = Math.abs(angleOffset) / (cfg.randomness * 0.5 + 0.01);
+    const sparsity = Math.min((radialSparsity + angularSparsity) * 0.5, 1.0);
+    tmp.copy(dense).lerp(sparse, sparsity).multiplyScalar(cfg.starBrightness);
+    colors[i * 3] = tmp.r;
+    colors[i * 3 + 1] = tmp.g;
+    colors[i * 3 + 2] = tmp.b;
+    phases[i] = Math.random() * Math.PI * 2;
   }
-
-  createGalaxySystem() {
-    if (this.galaxy) {
-      this.scene.remove(this.galaxy);
-      if (this.galaxy.material) this.galaxy.material.dispose();
-    }
-    const COUNT = this.COUNT;
-    this.spawnPositionBuffer = instancedArray(COUNT, 'vec3');
-    this.originalPositionBuffer = instancedArray(COUNT, 'vec3');
-    this.densityFactorBuffer = instancedArray(COUNT, 'float');
-    this.twinklePhaseBuffer = instancedArray(COUNT, 'float');
-
-    this.computeInit = Fn(() => {
-      const idx = instanceIndex;
-      const seed = idx.toFloat();
-      const radius = hash(seed.add(1)).pow(0.5).mul(this.uniforms.galaxy.radius);
-      const normalizedRadius = radius.div(this.uniforms.galaxy.radius);
-      const armIndex = hash(seed.add(2)).mul(this.uniforms.galaxy.armCount).floor();
-      const armAngle = armIndex.mul(6.28318).div(this.uniforms.galaxy.armCount);
-      const spiralAngle = normalizedRadius.mul(this.uniforms.galaxy.spiralTightness).mul(6.28318);
-      const angleOffset = hash(seed.add(3)).sub(0.5).mul(this.uniforms.galaxy.randomness);
-      const radiusOffset = hash(seed.add(4)).sub(0.5).mul(this.uniforms.galaxy.armWidth);
-      const angle = armAngle.add(spiralAngle).add(angleOffset);
-      const offsetRadius = radius.add(radiusOffset);
-      const x = cos(angle).mul(offsetRadius);
-      const z = sin(angle).mul(offsetRadius);
-      const thicknessFactor = float(1.0).sub(normalizedRadius).add(0.2);
-      const y = hash(seed.add(5)).sub(0.5).mul(this.uniforms.galaxy.thickness).mul(thicknessFactor);
-      const position = vec3(x, y, z);
-      this.spawnPositionBuffer.element(idx).assign(position);
-      this.originalPositionBuffer.element(idx).assign(position);
-      const radialSparsity = radiusOffset.abs().div(this.uniforms.galaxy.armWidth.mul(0.5).add(0.01));
-      const angularSparsity = angleOffset.abs().div(this.uniforms.galaxy.randomness.mul(0.5).add(0.01));
-      const sparsityFactor = radialSparsity.add(angularSparsity).mul(0.5).min(1.0);
-      this.densityFactorBuffer.element(idx).assign(sparsityFactor);
-      this.twinklePhaseBuffer.element(idx).assign(hash(seed.add(8)).mul(6.28318));
-    })().compute(COUNT);
-
-    this.computeUpdate = Fn(() => {
-      const idx = instanceIndex;
-      const position = this.spawnPositionBuffer.element(idx).toVar();
-      const originalPos = this.originalPositionBuffer.element(idx);
-      const rotatedPos = applyDifferentialRotation(
-        position, this.uniforms.compute.rotationSpeed, this.uniforms.compute.deltaTime
-      );
-      position.assign(rotatedPos);
-      const rotatedOriginal = applyDifferentialRotation(
-        originalPos, this.uniforms.compute.rotationSpeed, this.uniforms.compute.deltaTime
-      );
-      this.originalPositionBuffer.element(idx).assign(rotatedOriginal);
-      const springForce = applySpringForce(position, rotatedOriginal, float(2.0), this.uniforms.compute.deltaTime);
-      position.addAssign(springForce);
-      this.spawnPositionBuffer.element(idx).assign(position);
-    })().compute(COUNT);
-
-    const spriteMaterial = new THREE.SpriteNodeMaterial();
-    spriteMaterial.transparent = false;
-    spriteMaterial.depthWrite = false;
-    spriteMaterial.blending = THREE.AdditiveBlending;
-
-    const starPos = this.spawnPositionBuffer.toAttribute();
-    const densityFactor = this.densityFactorBuffer.toAttribute();
-    const twinklePhase = this.twinklePhaseBuffer.toAttribute();
-
-    const circleShape = Fn(() => {
-      const center = uv().sub(0.5).mul(2.0);
-      const dist = length(center);
-      const alpha = smoothstep(1.0, 0.0, dist).mul(smoothstep(1.0, 0.3, dist));
-      return alpha;
-    })();
-
-    // Per-star twinkle: 0.72 - 1.0 brightness oscillation
-    const tw = sin(this.uniforms.compute.time.mul(1.6).add(twinklePhase)).mul(0.5).add(0.5);
-    const twinkleMul = tw.mul(0.28).add(0.72);
-
-    const starColorNode = mix(
-      vec3(this.uniforms.visual.denseStarColor),
-      vec3(this.uniforms.visual.sparseStarColor),
-      densityFactor
-    ).mul(this.uniforms.visual.starBrightness).mul(twinkleMul);
-
-    spriteMaterial.positionNode = starPos;
-    spriteMaterial.colorNode = vec4(starColorNode.x, starColorNode.y, starColorNode.z, float(1.0));
-    spriteMaterial.opacityNode = circleShape;
-    spriteMaterial.scaleNode = this.uniforms.visual.particleSize;
-
-    this.galaxy = new THREE.Sprite(spriteMaterial);
-    this.galaxy.count = COUNT;
-    this.galaxy.frustumCulled = false;
-    this.scene.add(this.galaxy);
-  }
-
-  createClouds(cloudTexture) {
-    if (this.cloudPlane) {
-      this.scene.remove(this.cloudPlane);
-      if (this.cloudPlane.material) this.cloudPlane.material.dispose();
-    }
-    const CLOUD_COUNT = this.config.cloudCount;
-    const cloudPositionBuffer = instancedArray(CLOUD_COUNT, 'vec3');
-    const cloudOriginalPositionBuffer = instancedArray(CLOUD_COUNT, 'vec3');
-    const cloudColorBuffer = instancedArray(CLOUD_COUNT, 'vec3');
-    const cloudSizeBuffer = instancedArray(CLOUD_COUNT, 'float');
-    const cloudRotationBuffer = instancedArray(CLOUD_COUNT, 'float');
-
-    this.cloudInit = Fn(() => {
-      const idx = instanceIndex;
-      const seed = idx.toFloat().add(10000);
-      const radius = hash(seed.add(1)).pow(0.7).mul(this.uniforms.galaxy.radius);
-      const normalizedRadius = radius.div(this.uniforms.galaxy.radius);
-      const armIndex = hash(seed.add(2)).mul(this.uniforms.galaxy.armCount).floor();
-      const armAngle = armIndex.mul(6.28318).div(this.uniforms.galaxy.armCount);
-      const spiralAngle = normalizedRadius.mul(this.uniforms.galaxy.spiralTightness).mul(6.28318);
-      const angleOffset = hash(seed.add(3)).sub(0.5).mul(this.uniforms.galaxy.randomness);
-      const radiusOffset = hash(seed.add(4)).sub(0.5).mul(this.uniforms.galaxy.armWidth);
-      const angle = armAngle.add(spiralAngle).add(angleOffset);
-      const offsetRadius = radius.add(radiusOffset);
-      const x = cos(angle).mul(offsetRadius);
-      const z = sin(angle).mul(offsetRadius);
-      const thicknessFactor = float(1.0).sub(normalizedRadius).add(0.15);
-      const y = hash(seed.add(5)).sub(0.5).mul(this.uniforms.galaxy.thickness).mul(thicknessFactor);
-      const position = vec3(x, y, z);
-      cloudPositionBuffer.element(idx).assign(position);
-      cloudOriginalPositionBuffer.element(idx).assign(position);
-      const tintColor = vec3(this.uniforms.visual.cloudTintColor);
-      const cloudColor = tintColor.mul(float(1.0).sub(normalizedRadius.mul(0.3)));
-      cloudColorBuffer.element(idx).assign(cloudColor);
-      const densityFactor = float(1.0).sub(normalizedRadius.mul(0.5));
-      const size = hash(seed.add(6)).mul(0.5).add(0.7).mul(densityFactor);
-      cloudSizeBuffer.element(idx).assign(size);
-      const rotation = hash(seed.add(7)).mul(6.28318);
-      cloudRotationBuffer.element(idx).assign(rotation);
-    })().compute(CLOUD_COUNT);
-
-    this.cloudUpdate = Fn(() => {
-      const idx = instanceIndex;
-      const position = cloudPositionBuffer.element(idx).toVar();
-      const originalPos = cloudOriginalPositionBuffer.element(idx);
-      const rotatedPos = applyDifferentialRotation(
-        position, this.uniforms.compute.rotationSpeed, this.uniforms.compute.deltaTime
-      );
-      position.assign(rotatedPos);
-      const rotatedOriginal = applyDifferentialRotation(
-        originalPos, this.uniforms.compute.rotationSpeed, this.uniforms.compute.deltaTime
-      );
-      cloudOriginalPositionBuffer.element(idx).assign(rotatedOriginal);
-      const springForce = applySpringForce(position, rotatedOriginal, float(1.0), this.uniforms.compute.deltaTime);
-      position.addAssign(springForce);
-      cloudPositionBuffer.element(idx).assign(position);
-    })().compute(CLOUD_COUNT);
-
-    const cloudMaterial = new THREE.SpriteNodeMaterial();
-    cloudMaterial.transparent = true;
-    cloudMaterial.depthWrite = false;
-    cloudMaterial.blending = THREE.AdditiveBlending;
-
-    const cloudPos = cloudPositionBuffer.toAttribute();
-    const cloudColor = cloudColorBuffer.toAttribute();
-    const cloudSize = cloudSizeBuffer.toAttribute();
-    const cloudRotation = cloudRotationBuffer.toAttribute();
-
-    cloudMaterial.positionNode = cloudPos;
-    cloudMaterial.colorNode = vec4(cloudColor.x, cloudColor.y, cloudColor.z, float(1.0));
-    cloudMaterial.scaleNode = cloudSize.mul(this.uniforms.visual.cloudSize);
-    cloudMaterial.rotationNode = cloudRotation;
-    const cloudTextureNode = texture(cloudTexture, uv());
-    cloudMaterial.opacityNode = cloudTextureNode.a.mul(this.uniforms.visual.cloudOpacity);
-
-    this.cloudPlane = new THREE.Sprite(cloudMaterial);
-    this.cloudPlane.count = CLOUD_COUNT;
-    this.cloudPlane.frustumCulled = false;
-    this.cloudPlane.renderOrder = -1;
-    this.scene.add(this.cloudPlane);
-    this.cloudInitialized = false;
-  }
-
-  async update(renderer, deltaTime) {
-    if (!this.initialized) {
-      await renderer.computeAsync(this.computeInit);
-      this.initialized = true;
-    }
-    if (!this.cloudInitialized && this.cloudInit) {
-      await renderer.computeAsync(this.cloudInit);
-      this.cloudInitialized = true;
-    }
-    this.uniforms.compute.time.value += deltaTime;
-    this.uniforms.compute.deltaTime.value = deltaTime;
-    await renderer.computeAsync(this.computeUpdate);
-    if (this.cloudUpdate) {
-      await renderer.computeAsync(this.cloudUpdate);
-    }
-  }
-
-  dispose() {
-    if (this.galaxy) {
-      this.scene.remove(this.galaxy);
-      if (this.galaxy.material) this.galaxy.material.dispose();
-      this.galaxy = null;
-    }
-    if (this.cloudPlane) {
-      this.scene.remove(this.cloudPlane);
-      if (this.cloudPlane.material) this.cloudPlane.material.dispose();
-      this.cloudPlane = null;
-    }
-    this.initialized = false;
-    this.cloudInitialized = false;
-  }
+  return { positions, colors, phases, radii };
 }
 
-/* ---------------- Procedural soft cloud texture ---------------- */
-function makeCloudTexture() {
+/* Soft round sprite texture (for clouds). */
+function makeSoftTexture() {
   const c = document.createElement('canvas');
   c.width = 128; c.height = 128;
   const ctx = c.getContext('2d');
   const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
   g.addColorStop(0, 'rgba(255,255,255,1)');
-  g.addColorStop(0.35, 'rgba(255,255,255,0.45)');
-  g.addColorStop(0.7, 'rgba(255,255,255,0.12)');
+  g.addColorStop(0.35, 'rgba(255,255,255,0.5)');
+  g.addColorStop(0.7, 'rgba(255,255,255,0.14)');
   g.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 128, 128);
@@ -333,44 +98,10 @@ function makeCloudTexture() {
   return tex;
 }
 
-/* ---------------- Distant starry background ---------------- */
-function createStarryBackground(scene, count) {
-  const geo = new THREE.BufferGeometry();
-  const pos = new Float32Array(count * 3);
-  const col = new Float32Array(count * 3);
-  for (let i = 0; i < count; i++) {
-    const theta = Math.random() * Math.PI * 2;
-    const phi = Math.acos(2 * Math.random() - 1);
-    const radius = 90 + Math.random() * 110;
-    pos[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
-    pos[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
-    pos[i * 3 + 2] = radius * Math.cos(phi);
-    const brightness = 0.55 + Math.random() * 0.35;
-    const tint = Math.random();
-    if (tint < 0.15) {
-      col[i * 3] = brightness * 0.75; col[i * 3 + 1] = brightness * 0.82; col[i * 3 + 2] = brightness;
-    } else if (tint < 0.28) {
-      col[i * 3] = brightness; col[i * 3 + 1] = brightness * 0.85; col[i * 3 + 2] = brightness * 0.72;
-    } else {
-      col[i * 3] = brightness; col[i * 3 + 1] = brightness; col[i * 3 + 2] = brightness;
-    }
-  }
-  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  const mat = new THREE.PointsMaterial({
-    size: 0.35, vertexColors: true, transparent: true, opacity: 0.85, sizeAttenuation: true,
-    depthWrite: false
-  });
-  const stars = new THREE.Points(geo, mat);
-  stars.frustumCulled = false;
-  scene.add(stars);
-  return stars;
-}
-
-/* ---------------- Main entry: initGalaxy(canvas, opts) ---------------- */
 export async function initGalaxy(canvas, opts) {
   opts = opts || {};
   const reduceMotion = !!opts.reduceMotion;
+  const onSlow = opts.onSlow || function () {};
 
   let renderer;
   try {
@@ -390,16 +121,92 @@ export async function initGalaxy(canvas, opts) {
   camera.position.set(0, CAM_Y, CAM_Z);
   camera.lookAt(0, -1.5, 0);
 
-  const galaxy = new BgGalaxy(scene, CONFIG);
-  galaxy.createGalaxySystem();
-  galaxy.createClouds(makeCloudTexture());
-  createStarryBackground(scene, CONFIG.bgStarCount);
+  const timeU = uniform(0);
+  const DPR = Math.min(window.devicePixelRatio || 1, 1.5);
 
+  /* ---- Galaxy stars (Points, TSL twinkle) ---- */
+  const g = generateSpiral(CONFIG.starCount, CONFIG);
+  const gGeo = new THREE.BufferGeometry();
+  gGeo.setAttribute('position', new THREE.BufferAttribute(g.positions, 3));
+  gGeo.setAttribute('color', new THREE.BufferAttribute(g.colors, 3));
+  gGeo.setAttribute('aPhase', new THREE.BufferAttribute(g.phases, 1));
+
+  const gMat = new THREE.PointsNodeMaterial();
+  gMat.vertexColors = false;
+  gMat.transparent = true;
+  gMat.depthWrite = false;
+  gMat.blending = THREE.AdditiveBlending;
+
+  const twPhase = attribute('aPhase');
+  const tw = sin(timeU.mul(1.7).add(twPhase)).mul(0.5).add(0.5);
+  const twinkleMul = tw.mul(0.30).add(0.70);
+  const softDot = Fn(() => {
+    const cc = uv().sub(0.5).mul(2.0);
+    const d = length(cc);
+    return smoothstep(1.0, 0.25, d);
+  })();
+  gMat.colorNode = vec4(attribute('color'), float(1.0)).mul(twinkleMul);
+  gMat.opacityNode = softDot;
+  gMat.sizeNode = float(CONFIG.pointSize * DPR);
+  // size attenuation: keep constant screen size (background)
+  gMat.sizeAttenuation = false;
+
+  const galaxyPts = new THREE.Points(gGeo, gMat);
+  galaxyPts.frustumCulled = false;
+  scene.add(galaxyPts);
+
+  /* ---- Dust clouds (Points, soft texture, slow) ---- */
+  const cGen = generateSpiral(CONFIG.cloudCount, CONFIG);
+  const cGeo = new THREE.BufferGeometry();
+  cGeo.setAttribute('position', new THREE.BufferAttribute(cGen.positions, 3));
+  const cMat = new THREE.PointsNodeMaterial();
+  const cloudTex = makeSoftTexture();
+  cMat.map = cloudTex;
+  cMat.transparent = true;
+  cMat.depthWrite = false;
+  cMat.blending = THREE.AdditiveBlending;
+  cMat.opacityNode = float(CONFIG.cloudOpacity * 3.0);
+  const cloudCol = new THREE.Color(CONFIG.cloudTintColor);
+  cMat.colorNode = vec4(float(cloudCol.r), float(cloudCol.g), float(cloudCol.b), float(1.0));
+  cMat.sizeNode = float(CONFIG.cloudSize * DPR);
+  cMat.sizeAttenuation = false;
+  const cloudPts = new THREE.Points(cGeo, cMat);
+  cloudPts.frustumCulled = false;
+  cloudPts.renderOrder = -1;
+  scene.add(cloudPts);
+
+  /* ---- Distant background stars ---- */
+  const bgGeo = new THREE.BufferGeometry();
+  const bgPos = new Float32Array(CONFIG.bgStarCount * 3);
+  const bgCol = new Float32Array(CONFIG.bgStarCount * 3);
+  for (let i = 0; i < CONFIG.bgStarCount; i++) {
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const radius = 90 + Math.random() * 110;
+    bgPos[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+    bgPos[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+    bgPos[i * 3 + 2] = radius * Math.cos(phi);
+    const b = 0.5 + Math.random() * 0.4;
+    const t = Math.random();
+    if (t < 0.15) { bgCol[i*3] = b*0.75; bgCol[i*3+1] = b*0.82; bgCol[i*3+2] = b; }
+    else if (t < 0.28) { bgCol[i*3] = b; bgCol[i*3+1] = b*0.85; bgCol[i*3+2] = b*0.72; }
+    else { bgCol[i*3] = b; bgCol[i*3+1] = b; bgCol[i*3+2] = b; }
+  }
+  bgGeo.setAttribute('position', new THREE.BufferAttribute(bgPos, 3));
+  bgGeo.setAttribute('color', new THREE.BufferAttribute(bgCol, 3));
+  const bgMat = new THREE.PointsMaterial({
+    size: 1.6 * DPR, vertexColors: true, transparent: true, opacity: 0.85,
+    sizeAttenuation: false, depthWrite: false
+  });
+  const bgPts = new THREE.Points(bgGeo, bgMat);
+  bgPts.frustumCulled = false;
+  scene.add(bgPts);
+
+  /* ---- Scroll parallax ---- */
   let scrollY = 0;
   const onScroll = () => { scrollY = window.scrollY || 0; };
   window.addEventListener('scroll', onScroll, { passive: true });
   onScroll();
-
   const onResize = () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
@@ -407,61 +214,99 @@ export async function initGalaxy(canvas, opts) {
   };
   window.addEventListener('resize', onResize);
 
-  // Warm up: run init compute + one frame so first paint isn't empty
-  try {
-    await galaxy.update(renderer, 0.016);
-  } catch (e) {
-    cleanup();
-    return false;
-  }
-  renderFrame();
-
   function renderFrame() {
-    // Scroll parallax: camera drifts up slightly as page scrolls
     camera.position.y = CAM_Y + scrollY * 0.0028;
     camera.lookAt(0, -1.5, 0);
     renderer.render(scene, camera);
   }
 
+  /* Differential rotation on CPU: inner stars orbit faster. */
+  const posAttr = gGeo.getAttribute('position');
+  const posArr = posAttr.array;
+  const radArr = g.radii;
+  const N = CONFIG.starCount;
+  function rotateGalaxy(dt) {
+    const base = CONFIG.rotationSpeed * dt;
+    for (let i = 0; i < N; i++) {
+      const r = radArr[i];
+      const ang = base / (r * 0.12 + 1.0);
+      // small-angle approx is fine, but do exact for stability
+      const cosA = Math.cos(ang), sinA = Math.sin(ang);
+      const ix = i * 3;
+      const x = posArr[ix], z = posArr[ix + 2];
+      posArr[ix] = x * cosA - z * sinA;
+      posArr[ix + 2] = x * sinA + z * cosA;
+    }
+    posAttr.needsUpdate = true;
+  }
+  // Clouds drift at 40% speed
+  const cPosAttr = cGeo.getAttribute('position');
+  const cPosArr = cPosAttr.array;
+  const cRad = cGen.radii;
+  const CN = CONFIG.cloudCount;
+  function rotateClouds(dt) {
+    const base = CONFIG.rotationSpeed * 0.4 * dt;
+    for (let i = 0; i < CN; i++) {
+      const r = cRad[i];
+      const ang = base / (r * 0.12 + 1.0);
+      const cosA = Math.cos(ang), sinA = Math.sin(ang);
+      const ix = i * 3;
+      const x = cPosArr[ix], z = cPosArr[ix + 2];
+      cPosArr[ix] = x * cosA - z * sinA;
+      cPosArr[ix + 2] = x * sinA + z * cosA;
+    }
+    cPosAttr.needsUpdate = true;
+  }
+
   function cleanup() {
     window.removeEventListener('scroll', onScroll);
     window.removeEventListener('resize', onResize);
-    try { galaxy.dispose(); } catch (e) {}
+    try { scene.remove(galaxyPts); gGeo.dispose(); gMat.dispose(); } catch (e) {}
+    try { scene.remove(cloudPts); cGeo.dispose(); cMat.dispose(); } catch (e) {}
+    try { scene.remove(bgPts); bgGeo.dispose(); bgMat.dispose(); } catch (e) {}
+    try { cloudTex.dispose(); } catch (e) {}
     try { renderer.dispose(); } catch (e) {}
   }
 
+  // First frame (also serves reduced-motion: static single render)
+  renderFrame();
+
   if (reduceMotion) {
-    // Static single frame; no loop, no drift
-    return {
-      ok: true,
-      dispose: cleanup,
-      setPaused: function () {}
-    };
+    return { ok: true, dispose: cleanup, setPaused: function () {} };
   }
 
   let running = true;
   let lastTime = performance.now();
+  let slowNotified = false;
+  // FPS monitor: if avg FPS < 24 over first 4s, ask host to degrade
+  let frames = 0;
+  const fpsStart = performance.now();
+
   const onVis = () => {
     const was = running;
     running = !document.hidden;
-    if (running && !was) {
-      lastTime = performance.now();
-      requestAnimationFrame(animate);
-    }
+    if (running && !was) { lastTime = performance.now(); requestAnimationFrame(animate); }
   };
   document.addEventListener('visibilitychange', onVis);
 
-  async function animate() {
+  function animate() {
     if (!running) return;
     const now = performance.now();
     const dt = Math.min((now - lastTime) / 1000, 0.05);
     lastTime = now;
+    timeU.value += dt;
     try {
-      await galaxy.update(renderer, dt);
-    } catch (e) {
-      return; // GPU context lost; stop looping
+      rotateGalaxy(dt);
+      rotateClouds(dt);
+    } catch (e) { return; }
+    try {
+      renderFrame();
+    } catch (e) { return; }
+    frames++;
+    if (!slowNotified && now - fpsStart > 4000) {
+      const fps = frames / ((now - fpsStart) / 1000);
+      if (fps < 24) { slowNotified = true; onSlow(); return; }
     }
-    renderFrame();
     requestAnimationFrame(animate);
   }
   requestAnimationFrame(animate);
