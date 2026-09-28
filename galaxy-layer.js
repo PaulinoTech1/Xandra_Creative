@@ -83,7 +83,8 @@
         "background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.95) 0%,rgba(192,132,252,.55) 22%,rgba(88,28,135,.35) 45%,transparent 72%);",
         "transform:scale(.2);}",
         (reduceMotion ? "" : "#xa-warp.xa-go{animation:xa-warp .38s ease-out forwards;}"),
-        (reduceMotion ? "" : "@keyframes xa-warp{to{opacity:1;transform:scale(2.6);}}")
+        (reduceMotion ? "" : "@keyframes xa-warp{to{opacity:1;transform:scale(2.6);}}"),
+        "@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important;scroll-behavior:auto !important;}}"
       ].join("\n");
       var style = document.createElement("style");
       style.id = "xa-galaxy-css";
@@ -185,9 +186,10 @@
 
       for (var i = 0; i < stars.length; i++) {
         var s = stars[i];
-        // Slow drift + scroll parallax (near stars shift more)
-        var px = (s.x + t * 2 * s.depth) % W;
-        var py = (s.y + t * 0.7 * s.depth - scrollY * 0.12 * s.depth) % H;
+        // Slow drift + scroll parallax (near stars shift more).
+        // Under reduced motion the field is fully static.
+        var px = reduceMotion ? s.x : (s.x + t * 2 * s.depth) % W;
+        var py = reduceMotion ? s.y : (s.y + t * 0.7 * s.depth - scrollY * 0.12 * s.depth) % H;
         if (py < 0) py += H;
         var tw = reduceMotion ? 0.85 : (0.55 + 0.45 * Math.sin(s.tw + t * s.twSpeed));
         var a = (0.45 + 0.55 * s.depth) * tw;
