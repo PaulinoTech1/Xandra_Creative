@@ -73,8 +73,8 @@
     /* ---------- CSS ---------- */
     if (!document.getElementById("xa-galaxy-css")) {
       var css = [
-        "#xa-galaxy{position:fixed;inset:0;z-index:-1;pointer-events:none;}",
-        ".xa-nebula{position:fixed;border-radius:9999px;filter:blur(90px);z-index:-1;pointer-events:none;opacity:.34;}",
+        "#xa-galaxy{position:fixed;inset:0;z-index:1;pointer-events:none;}",
+        ".xa-nebula{position:fixed;border-radius:9999px;filter:blur(90px);z-index:1;pointer-events:none;opacity:.34;}",
         "#xa-neb1{width:52vw;height:52vw;left:-14vw;top:-10vw;background:radial-gradient(circle,rgba(139,92,246,.75),transparent 70%);}",
         "#xa-neb2{width:44vw;height:44vw;right:-12vw;top:30vh;background:radial-gradient(circle,rgba(34,211,238,.55),transparent 70%);}",
         "#xa-neb3{width:48vw;height:48vw;left:22vw;bottom:-16vw;background:radial-gradient(circle,rgba(232,121,249,.5),transparent 70%);}",
