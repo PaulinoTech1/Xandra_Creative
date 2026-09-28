@@ -8,24 +8,66 @@
    - Slow-drifting nebula washes
    - Warp flash on internal navigation
    Respects prefers-reduced-motion. Idempotent via __xaGalaxy.
-   Boot is deferred until document.body exists (page chunks can
-   execute before <body> is parsed; appending earlier throws and
-   kills the whole layer).
+
+   IMPORTANT: Next.js hydrates the entire `document`
+   (hydrateRoot(document)), and React removes body children it
+   did not render. So elements must be injected AFTER hydration
+   settles, with a MutationObserver to re-add them if React
+   wipes them during a late client render.
    ============================================================ */
 (function () {
   if (window.__xaGalaxy) return;
   window.__xaGalaxy = 1;
 
+  var IDS = ["xa-galaxy", "xa-neb1", "xa-neb2", "xa-neb3", "xa-warp"];
+
   function boot() {
     if (!document.body || !document.head) {
-      // DOM not parsed yet; try again shortly.
       setTimeout(boot, 50);
       return;
     }
-    init();
+    // Wait for hydration to settle: run after window load + delay.
+    function go() {
+      ensureElements();
+      init();
+      watchForRemoval();
+    }
+    if (document.readyState === "complete") {
+      setTimeout(go, 1200);
+    } else {
+      window.addEventListener("load", function () { setTimeout(go, 1200); });
+      // Fallback: if load already fired or never fires, go after 5s.
+      setTimeout(function () {
+        if (!document.getElementById("xa-galaxy")) go();
+      }, 5000);
+    }
   }
 
-  function init() {
+  /* Re-add our elements if something (React hydration) removes them. */
+  var observed = false;
+  function watchForRemoval() {
+    if (observed || !("MutationObserver" in window) || !document.body) return;
+    observed = true;
+    var readding = false;
+    var obs = new MutationObserver(function () {
+      if (readding) return;
+      var missing = false;
+      for (var i = 0; i < IDS.length; i++) {
+        if (!document.getElementById(IDS[i])) { missing = true; break; }
+      }
+      if (missing) {
+        readding = true;
+        try { ensureElements(); } catch (e) {}
+        readding = false;
+      }
+    });
+    obs.observe(document.body, { childList: true });
+    // Stop watching after 60s; hydration is long done by then.
+    setTimeout(function () { try { obs.disconnect(); } catch (e) {} }, 60000);
+  }
+
+  function ensureElements() {
+    if (!document.body) return;
     var reduceMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 
     /* ---------- CSS ---------- */
@@ -42,8 +84,8 @@
         "#xa-warp{position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:0;",
         "background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.95) 0%,rgba(192,132,252,.55) 22%,rgba(88,28,135,.35) 45%,transparent 72%);",
         "transform:scale(.2);}",
-        (reduceMotion ? "" : "#xa-warp.xa-go{animation:xa-warp .55s ease-out forwards;}"),
-        "@keyframes xa-warp{0%{opacity:0;transform:scale(.2);}35%{opacity:1;}100%{opacity:0;transform:scale(3.2);}}"
+        (reduceMotion ? "" : "#xa-warp.xa-go{animation:xa-warp .38s ease-out forwards;}"),
+        (reduceMotion ? "" : "@keyframes xa-warp{to{opacity:1;transform:scale(2.6);}}")
       ].join("\n");
       var style = document.createElement("style");
       style.id = "xa-galaxy-css";
@@ -61,134 +103,130 @@
     });
 
     /* ---------- Starfield canvas ---------- */
-    var canvas = document.getElementById("xa-galaxy");
-    if (!canvas) {
-      canvas = document.createElement("canvas");
+    if (!document.getElementById("xa-galaxy")) {
+      var canvas = document.createElement("canvas");
       canvas.id = "xa-galaxy";
-      // Insert as first child so it sits behind content but above body bg.
       document.body.insertBefore(canvas, document.body.firstChild);
     }
-    var ctx = canvas.getContext("2d");
 
+    /* ---------- Warp overlay ---------- */
+    if (!document.getElementById("xa-warp")) {
+      var warp = document.createElement("div");
+      warp.id = "xa-warp";
+      document.body.appendChild(warp);
+    }
+  }
+
+  var started = false;
+  function init() {
+    if (started) return;
+    // Only start the animation once all elements are present.
+    for (var i = 0; i < IDS.length; i++) {
+      if (!document.getElementById(IDS[i])) return;
+    }
+    started = true;
+
+    var reduceMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    var canvas = document.getElementById("xa-galaxy");
+    var ctx = canvas.getContext("2d");
+    var stars = [];
     var W = 0, H = 0, DPR = 1;
+
     function resize() {
-      DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+      DPR = Math.min(window.devicePixelRatio || 1, 2);
       W = window.innerWidth; H = window.innerHeight;
       canvas.width = Math.floor(W * DPR);
       canvas.height = Math.floor(H * DPR);
       canvas.style.width = W + "px";
       canvas.style.height = H + "px";
-      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    }
-    resize();
-    window.addEventListener("resize", resize);
-
-    var PALETTE = ["#ffffff", "#e9d5ff", "#c4b5fd", "#a5f3fc", "#f0abfc", "#fde68a"];
-    var stars = [];
-    var COUNT = Math.min(220, Math.floor((W * H) / 9000));
-    for (var i = 0; i < COUNT; i++) {
-      stars.push({
-        x: Math.random() * W,
-        y: Math.random() * H,
-        r: 0.4 + Math.random() * 1.3,
-        c: PALETTE[(Math.random() * PALETTE.length) | 0],
-        ph: Math.random() * Math.PI * 2,
-        sp: 0.4 + Math.random() * 1.4,
-        depth: 0.15 + Math.random() * 0.85,
-        dx: 2 + Math.random() * 6,
-        dy: 1 + Math.random() * 4
-      });
+      seed();
     }
 
-    /* Shooting stars */
-    var meteors = [];
-    var nextMeteor = performance.now() + 6000 + Math.random() * 8000;
-    function spawnMeteor(now) {
-      var sx = Math.random() * W * 0.9 + W * 0.05;
-      meteors.push({ x: sx, y: -20, vx: -(260 + Math.random() * 320), vy: 200 + Math.random() * 220, life: 1 });
-      nextMeteor = now + 9000 + Math.random() * 9000;
+    function seed() {
+      stars = [];
+      var n = Math.floor((W * H) / 6500);
+      for (var i = 0; i < n; i++) {
+        var depth = Math.random();
+        stars.push({
+          x: Math.random() * W,
+          y: Math.random() * H,
+          r: 0.4 + depth * 1.6,
+          // depth: 0 = far (slow, dim), 1 = near (fast, bright)
+          depth: depth,
+          tw: Math.random() * Math.PI * 2,
+          twSpeed: 0.4 + Math.random() * 1.4,
+          hue: Math.random()
+        });
+      }
     }
 
-    var scrollYPos = 0;
-    window.addEventListener("scroll", function () { scrollYPos = window.scrollY || 0; }, { passive: true });
-
-    var running = true;
-    document.addEventListener("visibilitychange", function () {
-      running = !document.hidden;
-      if (running && !reduceMotion) requestAnimationFrame(frame);
-    });
-
-    function drawStar(s, t) {
-      var tw = reduceMotion ? 0.85 : (0.55 + 0.45 * Math.sin(t * 0.001 * s.sp + s.ph));
-      var px = (s.x - scrollYPos * 0.06 * s.depth) % W;
-      if (px < 0) px += W;
-      var py = s.y % H;
-      ctx.globalAlpha = Math.max(0.08, tw * (0.35 + 0.65 * s.depth));
-      ctx.fillStyle = s.c;
-      ctx.beginPath();
-      ctx.arc(px, py, s.r, 0, Math.PI * 2);
-      ctx.fill();
+    function starColor(s, alpha) {
+      // Mostly white/blue-white, occasional purple/pink/cyan tints
+      if (s.hue < 0.72) return "rgba(255,255,255," + alpha + ")";
+      if (s.hue < 0.82) return "rgba(196,181,253," + alpha + ")";
+      if (s.hue < 0.91) return "rgba(165,243,252," + alpha + ")";
+      return "rgba(249,168,212," + alpha + ")";
     }
 
-    function drawMeteor(m, dt) {
-      m.x += m.vx * dt; m.y += m.vy * dt; m.life -= dt * 1.1;
-      if (m.life <= 0 || m.y > H + 60) return false;
-      var tail = 90 * m.life;
-      var ang = Math.atan2(m.vy, m.vx);
-      var grad = ctx.createLinearGradient(m.x, m.y, m.x - Math.cos(ang) * tail, m.y - Math.sin(ang) * tail);
-      grad.addColorStop(0, "rgba(255,255,255," + (0.9 * m.life) + ")");
-      grad.addColorStop(0.4, "rgba(196,181,253," + (0.5 * m.life) + ")");
-      grad.addColorStop(1, "rgba(196,181,253,0)");
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = grad;
-      ctx.lineWidth = 1.6;
-      ctx.beginPath();
-      ctx.moveTo(m.x, m.y);
-      ctx.lineTo(m.x - Math.cos(ang) * tail, m.y - Math.sin(ang) * tail);
-      ctx.stroke();
-      return true;
+    var shooting = [];
+    function maybeShoot() {
+      if (reduceMotion) return;
+      if (shooting.length < 2 && Math.random() < 0.004) {
+        var sx = Math.random() * W * 0.8 + W * 0.1;
+        shooting.push({ x: sx, y: -20, vx: (Math.random() - 0.5) * 4 - 3, vy: 7 + Math.random() * 4, life: 1 });
+      }
     }
 
-    var last = performance.now();
+    var scrollY = 0;
+    function onScroll() { scrollY = window.scrollY || 0; }
+
     function frame(now) {
-      if (!running) return;
-      var dt = Math.min((now - last) / 1000, 0.05);
-      last = now;
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
       ctx.clearRect(0, 0, W, H);
+      var t = now / 1000;
 
-      if (!reduceMotion) {
-        for (var k = 0; k < stars.length; k++) {
-          var s = stars[k];
-          s.x -= s.dx * dt * s.depth;
-          s.y += s.dy * dt * s.depth;
-          if (s.x < -4) s.x += W + 8;
-          if (s.y > H + 4) s.y -= H + 8;
-        }
-        if (now >= nextMeteor) spawnMeteor(now);
+      for (var i = 0; i < stars.length; i++) {
+        var s = stars[i];
+        // Slow drift + scroll parallax (near stars shift more)
+        var px = (s.x + t * 2 * s.depth) % W;
+        var py = (s.y + t * 0.7 * s.depth - scrollY * 0.12 * s.depth) % H;
+        if (py < 0) py += H;
+        var tw = reduceMotion ? 0.85 : (0.55 + 0.45 * Math.sin(s.tw + t * s.twSpeed));
+        var a = (0.25 + 0.65 * s.depth) * tw;
+        ctx.fillStyle = starColor(s, a.toFixed(3));
+        ctx.beginPath();
+        ctx.arc(px, py, s.r, 0, 6.2832);
+        ctx.fill();
       }
-      for (var j = 0; j < stars.length; j++) drawStar(stars[j], now);
-      if (!reduceMotion) meteors = meteors.filter(function (m) { return drawMeteor(m, dt); });
 
-      ctx.globalAlpha = 1;
-      if (!reduceMotion) requestAnimationFrame(frame);
+      // Shooting stars
+      for (var j = shooting.length - 1; j >= 0; j--) {
+        var m = shooting[j];
+        m.x += m.vx; m.y += m.vy; m.life -= 0.02;
+        if (m.life <= 0 || m.y > H + 40) { shooting.splice(j, 1); continue; }
+        var grad = ctx.createLinearGradient(m.x, m.y, m.x - m.vx * 12, m.y - m.vy * 12);
+        grad.addColorStop(0, "rgba(255,255,255," + (0.9 * m.life).toFixed(3) + ")");
+        grad.addColorStop(1, "rgba(192,132,252,0)");
+        ctx.strokeStyle = grad;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.moveTo(m.x, m.y);
+        ctx.lineTo(m.x - m.vx * 12, m.y - m.vy * 12);
+        ctx.stroke();
+      }
+      maybeShoot();
+      requestAnimationFrame(frame);
     }
 
-    function start() {
-      last = performance.now();
-      if (reduceMotion) {
-        ctx.clearRect(0, 0, W, H);
-        for (var j = 0; j < stars.length; j++) drawStar(stars[j], 0);
-      } else {
-        requestAnimationFrame(frame);
-      }
-    }
-    start();
+    window.addEventListener("resize", resize);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    onScroll();
+    resize();
+    requestAnimationFrame(frame);
 
     /* ---------- Warp transition on internal navigation ---------- */
-    if (!reduceMotion && !document.getElementById("xa-warp")) {
-      var warp = document.createElement("div");
-      warp.id = "xa-warp";
-      document.body.appendChild(warp);
+    if (!reduceMotion) {
+      var warp = document.getElementById("xa-warp");
       var warping = false;
       document.addEventListener("click", function (e) {
         if (warping || e.defaultPrevented) return;
