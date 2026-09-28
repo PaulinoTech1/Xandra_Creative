@@ -35,3 +35,198 @@ else boot();
 setTimeout(insert,2500);
 setTimeout(insert,8000);
 })();
+;
+/* ============================================================
+   Xandra galaxy layer: mysterious galaxy traversal
+   Standalone IIFE. Injected into every page chunk.
+   - Fixed canvas starfield (twinkle, drift, scroll parallax)
+   - Occasional shooting stars
+   - Slow-drifting nebula washes
+   - Warp flash on internal navigation
+   Respects prefers-reduced-motion. Idempotent via __xaGalaxy.
+   ============================================================ */
+(function () {
+  if (window.__xaGalaxy) return;
+  window.__xaGalaxy = 1;
+
+  var reduceMotion = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
+  /* ---------- CSS ---------- */
+  var css = [
+    "#xa-galaxy{position:fixed;inset:0;z-index:-1;pointer-events:none;}",
+    ".xa-nebula{position:fixed;border-radius:9999px;filter:blur(90px);z-index:-1;pointer-events:none;opacity:.22;}",
+    "#xa-neb1{width:52vw;height:52vw;left:-14vw;top:-10vw;background:radial-gradient(circle,rgba(139,92,246,.55),transparent 70%);}",
+    "#xa-neb2{width:44vw;height:44vw;right:-12vw;top:30vh;background:radial-gradient(circle,rgba(34,211,238,.38),transparent 70%);}",
+    "#xa-neb3{width:48vw;height:48vw;left:22vw;bottom:-16vw;background:radial-gradient(circle,rgba(232,121,249,.34),transparent 70%);}",
+    (reduceMotion ? "" : ".xa-nebula{animation:xa-drift 70s ease-in-out infinite alternate;}"),
+    (reduceMotion ? "" : "#xa-neb2{animation-duration:95s;}#xa-neb3{animation-duration:120s;}"),
+    "@keyframes xa-drift{from{transform:translate3d(0,0,0) scale(1);}to{transform:translate3d(6vw,-4vh,0) scale(1.15);}}",
+    "#xa-warp{position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:0;",
+    "background:radial-gradient(circle at 50% 50%,rgba(255,255,255,.95) 0%,rgba(192,132,252,.55) 22%,rgba(88,28,135,.35) 45%,transparent 72%);",
+    "transform:scale(.2);}",
+    (reduceMotion ? "" : "#xa-warp.xa-go{animation:xa-warp .55s ease-out forwards;}"),
+    "@keyframes xa-warp{0%{opacity:0;transform:scale(.2);}35%{opacity:1;}100%{opacity:0;transform:scale(3.2);}}"
+  ].join("\n");
+  var style = document.createElement("style");
+  style.id = "xa-galaxy-css";
+  style.textContent = css;
+  document.head.appendChild(style);
+
+  /* ---------- Nebula blobs ---------- */
+  ["xa-neb1", "xa-neb2", "xa-neb3"].forEach(function (id) {
+    var d = document.createElement("div");
+    d.className = "xa-nebula";
+    d.id = id;
+    document.body.appendChild(d);
+  });
+
+  /* ---------- Starfield canvas ---------- */
+  var canvas = document.createElement("canvas");
+  canvas.id = "xa-galaxy";
+  document.body.appendChild(canvas);
+  var ctx = canvas.getContext("2d");
+
+  var W = 0, H = 0, DPR = 1;
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+    W = window.innerWidth; H = window.innerHeight;
+    canvas.width = Math.floor(W * DPR);
+    canvas.height = Math.floor(H * DPR);
+    canvas.style.width = W + "px";
+    canvas.style.height = H + "px";
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  resize();
+  window.addEventListener("resize", resize);
+
+  var PALETTE = ["#ffffff", "#e9d5ff", "#c4b5fd", "#a5f3fc", "#f0abfc", "#fde68a"];
+  var stars = [];
+  var COUNT = Math.min(220, Math.floor((W * H) / 9000));
+  for (var i = 0; i < COUNT; i++) {
+    stars.push({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      r: 0.4 + Math.random() * 1.3,
+      c: PALETTE[(Math.random() * PALETTE.length) | 0],
+      ph: Math.random() * Math.PI * 2,          // twinkle phase
+      sp: 0.4 + Math.random() * 1.4,            // twinkle speed
+      depth: 0.15 + Math.random() * 0.85,       // parallax depth
+      dx: 2 + Math.random() * 6,                // drift px/sec
+      dy: 1 + Math.random() * 4
+    });
+  }
+
+  /* Shooting stars */
+  var meteors = [];
+  var nextMeteor = performance.now() + 6000 + Math.random() * 8000;
+  function spawnMeteor(now) {
+    var sx = Math.random() * W * 0.9 + W * 0.05;
+    meteors.push({ x: sx, y: -20, vx: -(260 + Math.random() * 320), vy: 200 + Math.random() * 220, life: 1 });
+    nextMeteor = now + 9000 + Math.random() * 9000;
+  }
+
+  var scrollY = 0;
+  window.addEventListener("scroll", function () { scrollY = window.scrollY || 0; }, { passive: true });
+
+  var running = true;
+  document.addEventListener("visibilitychange", function () {
+    running = !document.hidden;
+    if (running && !reduceMotion) requestAnimationFrame(frame);
+  });
+
+  function drawStar(s, t) {
+    var tw = reduceMotion ? 0.85 : (0.55 + 0.45 * Math.sin(t * 0.001 * s.sp + s.ph));
+    var px = (s.x - scrollY * 0.06 * s.depth) % W;
+    if (px < 0) px += W;
+    var py = s.y % H;
+    ctx.globalAlpha = Math.max(0.08, tw * (0.35 + 0.65 * s.depth));
+    ctx.fillStyle = s.c;
+    ctx.beginPath();
+    ctx.arc(px, py, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  function drawMeteor(m, dt) {
+    m.x += m.vx * dt; m.y += m.vy * dt; m.life -= dt * 1.1;
+    if (m.life <= 0 || m.y > H + 60) return false;
+    var tail = 90 * m.life;
+    var ang = Math.atan2(m.vy, m.vx);
+    var grad = ctx.createLinearGradient(m.x, m.y, m.x - Math.cos(ang) * tail, m.y - Math.sin(ang) * tail);
+    grad.addColorStop(0, "rgba(255,255,255," + (0.9 * m.life) + ")");
+    grad.addColorStop(0.4, "rgba(196,181,253," + (0.5 * m.life) + ")");
+    grad.addColorStop(1, "rgba(196,181,253,0)");
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    ctx.moveTo(m.x, m.y);
+    ctx.lineTo(m.x - Math.cos(ang) * tail, m.y - Math.sin(ang) * tail);
+    ctx.stroke();
+    return true;
+  }
+
+  var last = performance.now();
+  function frame(now) {
+    if (!running) return;
+    var dt = Math.min((now - last) / 1000, 0.05);
+    last = now;
+    ctx.clearRect(0, 0, W, H);
+
+    if (!reduceMotion) {
+      for (var k = 0; k < stars.length; k++) {
+        var s = stars[k];
+        s.x -= s.dx * dt * s.depth;
+        s.y += s.dy * dt * s.depth;
+        if (s.x < -4) s.x += W + 8;
+        if (s.y > H + 4) s.y -= H + 8;
+      }
+      if (now >= nextMeteor) spawnMeteor(now);
+    }
+    for (var j = 0; j < stars.length; j++) drawStar(stars[j], now);
+    if (!reduceMotion) meteors = meteors.filter(function (m) { return drawMeteor(m, dt); });
+
+    ctx.globalAlpha = 1;
+    if (!reduceMotion) requestAnimationFrame(frame);
+  }
+
+  function start() {
+    last = performance.now();
+    if (reduceMotion) {
+      ctx.clearRect(0, 0, W, H);
+      for (var j = 0; j < stars.length; j++) drawStar(stars[j], 0);
+    } else {
+      requestAnimationFrame(frame);
+    }
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start);
+  } else {
+    start();
+  }
+
+  /* ---------- Warp transition on internal navigation ---------- */
+  if (!reduceMotion) {
+    var warp = document.createElement("div");
+    warp.id = "xa-warp";
+    document.body.appendChild(warp);
+    var warping = false;
+    document.addEventListener("click", function (e) {
+      if (warping || e.defaultPrevented) return;
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+      var a = e.target && e.target.closest ? e.target.closest("a") : null;
+      if (!a || !a.href) return;
+      if (a.target === "_blank" || (a.getAttribute("rel") || "").indexOf("noopener") !== -1) return;
+      var url;
+      try { url = new URL(a.href, location.href); } catch (err) { return; }
+      if (url.origin !== location.origin) return;
+      if (url.pathname === location.pathname && url.hash) return; // same-page anchor
+      e.preventDefault();
+      warping = true;
+      warp.classList.remove("xa-go");
+      void warp.offsetWidth; // restart animation
+      warp.classList.add("xa-go");
+      setTimeout(function () { location.href = url.href; }, 380);
+    }, true);
+  }
+})();
+
