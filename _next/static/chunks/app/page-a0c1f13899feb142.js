@@ -448,7 +448,8 @@ run();
    kills the whole layer).
    ============================================================ */
 (function () {
-  if (window.__xaGalaxy) return;
+  try { document.title = "IIFE-RAN"; } catch (e) {}
+  if (window.__xaGalaxy) { try { document.title = "GUARD-EARLY-EXIT"; } catch (e) {} return; }
   window.__xaGalaxy = 1;
 
   function mark(s){ try{ document.documentElement.setAttribute("data-xa-stage", s); }catch(e){} }
@@ -655,6 +656,7 @@ run();
       }, true);
     }
     mark("init-done");
+    try { document.title = "INIT-DONE"; } catch (e) {}
   }
 
   if (document.readyState === "loading") {
