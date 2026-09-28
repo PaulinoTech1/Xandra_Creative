@@ -185,48 +185,15 @@
     startShootingStars(reduceMotion);
     setupWarp(reduceMotion);
 
-    // Try WebGPU galaxy; fall back to 2D starfield on any failure.
-    var webgpuOK = !!(window.navigator && window.navigator.gpu);
-    if (webgpuOK) {
-      var timedOut = false;
-      var timer = setTimeout(function () {
-        timedOut = true;
-        if (!bgHandle && !fallbackRunning) degradeTo2D(reduceMotion);
-      }, 15000);
-      try {
-        ensureImportMap();
-        // Dynamic import so failure -> catch -> 2D fallback.
-        new Function(
-          "return import('/xa-galaxy-webgpu.js?v=galaxy16').then(function (m) { return m; });"
-        )().then(function (m) {
-          if (timedOut || !m || !m.initGalaxy) throw new Error("bad module");
-          var canvas = document.getElementById("xa-galaxy");
-          return m.initGalaxy(canvas, {
-            reduceMotion: reduceMotion,
-            onSlow: function () { degradeTo2D(reduceMotion); }
-          });
-        }).then(function (handle) {
-          clearTimeout(timer);
-          if (timedOut) { try { handle.dispose(); } catch (e) {} return; }
-          if (handle && handle.ok) {
-            bgHandle = handle;
-          } else {
-            degradeTo2D(reduceMotion);
-          }
-        }).catch(function () {
-          clearTimeout(timer);
-          if (!timedOut) degradeTo2D(reduceMotion);
-        });
-      } catch (e) {
-        clearTimeout(timer);
-        degradeTo2D(reduceMotion);
-      }
-    } else {
-      startFallback2D(reduceMotion);
-    }
+    // 2D spiral galaxy (primary renderer — guaranteed to work).
+    // WebGPU enhancement is deferred until it can be verified.
+    startFallback2D(reduceMotion);
   }
 
-  /* ---------- 2D fallback starfield (original implementation) ---------- */
+  /* ---------- 2D spiral galaxy (primary renderer) ----------
+     Canvas 2D spiral galaxy matching the WebGPU demo's look:
+     purple core -> cyan edges, differential rotation, twinkle,
+     scroll parallax, central glow. Guaranteed to render. */
   function startFallback2D(reduceMotion) {
     if (fallbackRunning) return;
     var canvas = document.getElementById("xa-galaxy");
@@ -234,11 +201,72 @@
     fallbackRunning = true;
     var ctx = canvas.getContext("2d");
     if (!ctx) return;
-    var stars = [];
+
     var W = 0, H = 0, DPR = 1;
+    var CX = 0, CY = 0, RMAX = 0;
+    var stars = [];
+    var bgStars = [];
+
+    var ARMS = 2;
+    var TILT = 0.42;           // vertical squash for angled view
+    var ROT = 0.018;           // base rotation rad/sec
+
+    function hexRGB(hex) {
+      var n = parseInt(hex.slice(1), 16);
+      return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+    }
+    var CORE = hexRGB("#c084fc");
+    var EDGE = hexRGB("#67e8f9");
+
+    function seed() {
+      stars = [];
+      bgStars = [];
+      CX = W * 0.5;
+      CY = H * 0.42;
+      RMAX = Math.min(W, H) * 0.52;
+
+      // Galaxy stars: spiral arms
+      var n = Math.floor((W * H) / 260);
+      if (n > 7000) n = 7000;
+      if (n < 2500) n = 2500;
+      for (var i = 0; i < n; i++) {
+        var rad = Math.pow(Math.random(), 0.55);          // 0..1, denser center
+        var arm = Math.floor(Math.random() * ARMS);
+        var armAngle = (arm / ARMS) * Math.PI * 2;
+        var spiral = rad * 1.35 * Math.PI * 2;
+        var jitter = (Math.random() - 0.5) * 1.15;
+        var angle = armAngle + spiral + jitter;
+        var rr = rad + (Math.random() - 0.5) * 0.16;
+        if (rr < 0.02) rr = 0.02;
+        // color: core purple -> edge cyan
+        var t = Math.min(Math.max((rad - 0.12) / 0.75, 0), 1);
+        var r = Math.round(CORE[0] + (EDGE[0] - CORE[0]) * t);
+        var g = Math.round(CORE[1] + (EDGE[1] - CORE[1]) * t);
+        var b = Math.round(CORE[2] + (EDGE[2] - CORE[2]) * t);
+        stars.push({
+          rad: rr, angle: angle,
+          size: 0.6 + Math.random() * 1.7 * (1.15 - rad * 0.7),
+          col: r + "," + g + "," + b,
+          tw: Math.random() * 6.283,
+          twSpd: 0.6 + Math.random() * 1.8,
+          bright: 0.55 + Math.random() * 0.45
+        });
+      }
+      // Distant background stars
+      var nb = Math.floor((W * H) / 9000);
+      for (var j = 0; j < nb; j++) {
+        bgStars.push({
+          x: Math.random() * W, y: Math.random() * H,
+          r: 0.4 + Math.random() * 1.1,
+          tw: Math.random() * 6.283,
+          twSpd: 0.4 + Math.random() * 1.2,
+          a: 0.35 + Math.random() * 0.45
+        });
+      }
+    }
 
     function resize() {
-      DPR = Math.min(window.devicePixelRatio || 1, 2);
+      DPR = Math.min(window.devicePixelRatio || 1, 1.5);
       W = window.innerWidth; H = window.innerHeight;
       canvas.width = Math.floor(W * DPR);
       canvas.height = Math.floor(H * DPR);
@@ -246,74 +274,83 @@
       canvas.style.height = H + "px";
       seed();
     }
-    function seed() {
-      stars = [];
-      var n = Math.floor((W * H) / 4200);
-      for (var i = 0; i < n; i++) {
-        var depth = Math.random();
-        stars.push({
-          x: Math.random() * W, y: Math.random() * H,
-          r: 0.5 + depth * 1.8, depth: depth,
-          tw: Math.random() * Math.PI * 2,
-          twSpeed: 0.4 + Math.random() * 1.4,
-          hue: Math.random()
-        });
-      }
-    }
-    function starColor(s, alpha) {
-      if (s.hue < 0.72) return "rgba(255,255,255," + alpha + ")";
-      if (s.hue < 0.82) return "rgba(196,181,253," + alpha + ")";
-      if (s.hue < 0.91) return "rgba(165,243,252," + alpha + ")";
-      return "rgba(249,168,212," + alpha + ")";
-    }
+
     var scrollY = 0;
     function onScroll() { scrollY = window.scrollY || 0; }
-    var shooting = [];
-    function maybeShoot() {
-      if (reduceMotion) return;
-      if (shooting.length < 2 && Math.random() < 0.004) {
-        var sx = Math.random() * W * 0.8 + W * 0.1;
-        shooting.push({ x: sx, y: -20, vx: (Math.random() - 0.5) * 4 - 3, vy: 7 + Math.random() * 4, life: 1 });
-      }
+    var rot = 0;
+
+    // Pre-rendered central glow sprite
+    var glowC = document.createElement("canvas");
+    function makeGlow() {
+      var s = Math.floor(RMAX * 0.9);
+      if (s < 50) s = 50;
+      glowC.width = s; glowC.height = Math.floor(s * TILT) || 50;
+      var g = glowC.getContext("2d");
+      var gr = g.createRadialGradient(s/2, glowC.height/2, 0, s/2, glowC.height/2, s/2);
+      gr.addColorStop(0, "rgba(192,132,252,0.30)");
+      gr.addColorStop(0.35, "rgba(139,92,246,0.16)");
+      gr.addColorStop(0.7, "rgba(103,232,249,0.05)");
+      gr.addColorStop(1, "rgba(103,232,249,0)");
+      g.fillStyle = gr;
+      g.fillRect(0, 0, s, glowC.height);
     }
+
     function frame(now) {
       if (!fallbackRunning) return;
-      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-      ctx.clearRect(0, 0, W, H);
       var t = now / 1000;
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+      // background
+      ctx.fillStyle = "#030014";
+      ctx.fillRect(0, 0, W, H);
+
+      var parY = reduceMotion ? 0 : scrollY * 0.08;
+      var cy = CY - parY * 0.3;
+
+      // central glow
+      if (!reduceMotion || true) {
+        ctx.drawImage(glowC, CX - glowC.width / 2, cy - glowC.height / 2);
+      }
+
+      // background stars (slow drift + parallax)
+      for (var bi = 0; bi < bgStars.length; bi++) {
+        var bs = bgStars[bi];
+        var bx = bs.x - (reduceMotion ? 0 : t * 1.5) % W;
+        if (bx < 0) bx += W;
+        var by = bs.y - parY * 0.12;
+        var btw = reduceMotion ? 0.8 : (0.6 + 0.4 * Math.sin(bs.tw + t * bs.twSpd));
+        ctx.fillStyle = "rgba(255,255,255," + (bs.a * btw).toFixed(3) + ")";
+        ctx.fillRect(bx, by, bs.r, bs.r);
+      }
+
+      // galaxy stars
+      if (!reduceMotion) rot += ROT * 0.016;
       for (var i = 0; i < stars.length; i++) {
         var s = stars[i];
-        var px = reduceMotion ? s.x : (s.x + t * 2 * s.depth) % W;
-        var py = reduceMotion ? s.y : (s.y + t * 0.7 * s.depth - scrollY * 0.12 * s.depth) % H;
-        if (py < 0) py += H;
-        var tw = reduceMotion ? 0.85 : (0.55 + 0.45 * Math.sin(s.tw + t * s.twSpeed));
-        var a = (0.45 + 0.55 * s.depth) * tw;
-        ctx.fillStyle = starColor(s, a.toFixed(3));
-        ctx.beginPath();
-        ctx.arc(px, py, s.r, 0, 6.2832);
-        ctx.fill();
+        // differential rotation: inner orbits faster
+        var a = s.angle + rot / (s.rad * 0.9 + 0.35);
+        var px = CX + Math.cos(a) * s.rad * RMAX;
+        var py = cy + Math.sin(a) * s.rad * RMAX * TILT;
+        if (px < -4 || px > W + 4 || py < -4 || py > H + 4) continue;
+        var tw = reduceMotion ? 0.85 : (0.62 + 0.38 * Math.sin(s.tw + t * s.twSpd));
+        var alpha = (0.35 + 0.65 * s.bright) * tw;
+        ctx.fillStyle = "rgba(" + s.col + "," + alpha.toFixed(3) + ")";
+        var sz = s.size;
+        if (sz <= 1.4) {
+          ctx.fillRect(px, py, sz, sz);
+        } else {
+          ctx.beginPath();
+          ctx.arc(px, py, sz * 0.62, 0, 6.2832);
+          ctx.fill();
+        }
       }
-      for (var j = shooting.length - 1; j >= 0; j--) {
-        var m = shooting[j];
-        m.x += m.vx; m.y += m.vy; m.life -= 0.02;
-        if (m.life <= 0 || m.y > H + 40) { shooting.splice(j, 1); continue; }
-        var grad = ctx.createLinearGradient(m.x, m.y, m.x - m.vx * 12, m.y - m.vy * 12);
-        grad.addColorStop(0, "rgba(255,255,255," + (0.9 * m.life).toFixed(3) + ")");
-        grad.addColorStop(1, "rgba(192,132,252,0)");
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = 1.6;
-        ctx.beginPath();
-        ctx.moveTo(m.x, m.y);
-        ctx.lineTo(m.x - m.vx * 12, m.y - m.vy * 12);
-        ctx.stroke();
-      }
-      maybeShoot();
       requestAnimationFrame(frame);
     }
-    window.addEventListener("resize", resize);
+
+    window.addEventListener("resize", function () { resize(); makeGlow(); });
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
     resize();
+    makeGlow();
     requestAnimationFrame(frame);
   }
 
