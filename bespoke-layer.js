@@ -341,14 +341,19 @@ var xaIO = null;
 var xaEnterN = 0;
 function scrollEntrances(){
   if (xaReduceMotion) return;
-  // Safety: force-show anything stuck hidden for 8s+
+  // Safety: force-show anything in/near viewport stuck hidden for 8s+
+  // (IO should have caught these; this is a fallback, not a pre-empt)
   var now = Date.now();
+  var vh = window.innerHeight;
   document.querySelectorAll(".xa-pre").forEach(function(el){
     var t = parseInt(el.dataset.xaPreT || "0", 10);
-    if (t && now - t > 8000) {
-      el.classList.add("xa-in");
-      if (xaIO) xaIO.unobserve(el);
-    }
+    if (!t || now - t < 8000) return;
+    var r = el.getBoundingClientRect();
+    if (r.top > vh + 100 || r.bottom < -100) return; // not near viewport, leave for IO
+    el.classList.remove("xa-pre");
+    el.classList.remove("xa-in");
+    el.style.transitionDelay = "";
+    if (xaIO) xaIO.unobserve(el);
   });
   if (!("IntersectionObserver" in window)) {
     document.querySelectorAll(".xa-pre").forEach(function(el){ el.classList.add("xa-in"); });
