@@ -195,7 +195,7 @@
         ensureImportMap();
         // Dynamic import so failure -> catch -> 2D fallback.
         new Function(
-          "return import('/xa-galaxy-webgpu.js').then(function (m) { return m; });"
+          "return import('/xa-galaxy-webgpu.js?v=galaxy16').then(function (m) { return m; });"
         )().then(function (m) {
           if (timedOut || !m || !m.initGalaxy) throw new Error("bad module");
           var canvas = document.getElementById("xa-galaxy");
