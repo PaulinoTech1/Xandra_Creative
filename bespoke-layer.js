@@ -171,11 +171,18 @@ function addSignature(){
 /* ---------- 6. Oscar: Studio Supervisor badge ---------- */
 function addOscar(){
   if (document.getElementById("xa-oscar")) return;
+  try { if (sessionStorage.getItem("xa-oscar-dismissed") === "1") return; } catch (e) {}
   var b = document.createElement("div");
   b.id = "xa-oscar";
   b.title = "Quality control. Nap schedule strictly enforced.";
-  b.innerHTML = '<span class="xa-paw">\u{1F43E}</span><span>Oscar &middot; Studio Supervisor</span>';
+  b.innerHTML = '<span class="xa-paw">\u{1F43E}</span><span>Oscar &middot; Studio Supervisor</span>' +
+    '<span id="xa-oscar-x" style="margin-left:6px;cursor:pointer;opacity:.6;font-size:12px;" title="Dismiss">&times;</span>';
   document.body.appendChild(b);
+  document.getElementById("xa-oscar-x").addEventListener("click", function(ev){
+    ev.stopPropagation();
+    b.remove();
+    try { sessionStorage.setItem("xa-oscar-dismissed", "1"); } catch (e) {}
+  });
 }
 
 /* ---------- 7. Twinkle the constellation stars ---------- */
@@ -445,7 +452,8 @@ function cosmosMap(){
   }).join("");
   var div = document.createElement("div");
   div.id = "xa-cosmos-map";
-  div.innerHTML = '<div class="xa-map-head"><span>\uD83D\uDDFA COSMOS MAP</span><span id="xa-map-toggle">\u2212</span></div>' +
+  div.className = "xa-collapsed";
+  div.innerHTML = '<div class="xa-map-head"><span>\uD83D\uDDFA COSMOS MAP</span><span id="xa-map-toggle">+</span></div>' +
     '<div class="xa-map-nodes">' + nodes + "</div>";
   document.body.appendChild(div);
   div.querySelector(".xa-map-head").addEventListener("click", function(){
