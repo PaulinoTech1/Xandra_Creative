@@ -25,14 +25,43 @@ background:
 .xa-dim-row:hover{transform:translateX(6px) scale(1.02);background:rgba(147,112,219,.12) !important;border-radius:8px}
 /* Custom text selection: her brand purple */
 ::selection{background:rgba(192,132,252,.4);color:#fff}
-/* Oscar supervisor badge */
-#xa-oscar{position:fixed;bottom:16px;left:16px;z-index:50;display:flex;align-items:center;gap:8px;
- background:rgba(15,10,30,.85);backdrop-filter:blur(8px);border:1px solid rgba(168,85,247,.35);
- border-radius:999px;padding:6px 14px 6px 8px;font-size:11px;color:#d8b4fe;cursor:default;
- box-shadow:0 4px 20px rgba(147,112,219,.25);transition:transform .2s}
-#xa-oscar:hover{transform:scale(1.05)}
-#xa-oscar .xa-paw{width:22px;height:22px;background:rgba(168,85,247,.2);border-radius:50%;
- display:flex;align-items:center;justify-content:center;font-size:13px}
+/* Sleek FAB dock: tiny icon buttons, panels expand with animation */
+.xa-fab{position:fixed;bottom:16px;z-index:50;width:42px;height:42px;border-radius:50%;
+ background:rgba(15,10,30,.82);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+ border:1px solid rgba(168,85,247,.35);display:flex;align-items:center;justify-content:center;
+ cursor:pointer;font-size:19px;box-shadow:0 4px 20px rgba(147,112,219,.22);padding:0;
+ transition:transform .25s cubic-bezier(.16,.8,.3,1),background .2s,border-color .2s}
+.xa-fab:hover{transform:scale(1.12);background:rgba(35,22,60,.9);border-color:rgba(192,132,252,.6)}
+.xa-fab.active{background:rgba(88,40,140,.85);border-color:rgba(192,132,252,.7)}
+#xa-oscar-fab{left:16px}
+#xa-map-fab{right:16px}
+.xa-pop{position:fixed;bottom:70px;z-index:50;min-width:210px;max-width:260px;
+ background:rgba(15,10,30,.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+ border:1px solid rgba(168,85,247,.35);border-radius:14px;padding:14px 12px;
+ box-shadow:0 12px 40px rgba(0,0,0,.5);
+ opacity:0;pointer-events:none;transform:translateY(14px) scale(.96);
+ transition:opacity .28s cubic-bezier(.16,.8,.3,1),transform .28s cubic-bezier(.16,.8,.3,1)}
+.xa-pop.open{opacity:1;pointer-events:auto;transform:none}
+#xa-oscar-pop{left:16px}
+#xa-map-pop{right:16px}
+.xa-pop-title{font-weight:700;letter-spacing:1.2px;font-size:10px;color:#c084fc;margin-bottom:10px;
+ display:flex;align-items:center;gap:6px}
+.xa-pop.open .xa-pop-item{animation:xa-pop-in .32s cubic-bezier(.16,.8,.3,1) backwards}
+.xa-pop.open .xa-pop-item:nth-child(2){animation-delay:.05s}
+.xa-pop.open .xa-pop-item:nth-child(3){animation-delay:.1s}
+.xa-pop.open .xa-pop-item:nth-child(4){animation-delay:.15s}
+.xa-pop.open .xa-pop-item:nth-child(5){animation-delay:.2s}
+.xa-pop.open .xa-pop-item:nth-child(6){animation-delay:.25s}
+.xa-pop.open .xa-pop-item:nth-child(7){animation-delay:.3s}
+@keyframes xa-pop-in{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+.xa-pop a.xa-pop-link{display:flex;align-items:center;gap:9px;color:#d8b4fe;text-decoration:none;
+ padding:7px 8px;border-radius:8px;font-size:12px;transition:background .18s}
+.xa-pop a.xa-pop-link:hover{background:rgba(147,112,219,.16)}
+.xa-pop a.xa-pop-link.xa-cur{background:rgba(147,112,219,.24);color:#fff;font-weight:600}
+.xa-pop .xa-quip{font-size:12px;color:#d8b4fe;line-height:1.5;font-style:italic;margin:4px 2px 10px}
+.xa-pop .xa-dismiss{font-size:10px;color:rgba(216,180,254,.5);cursor:pointer;text-align:center;
+ padding:6px;border-radius:6px;transition:color .2s}
+.xa-pop .xa-dismiss:hover{color:#d8b4fe}
 /* Acceptance signature */
 .xa-accept{font-size:11px;color:rgba(216,180,254,.55);text-align:center;margin-top:14px;letter-spacing:.3px}
 /* Konami celebration */
@@ -51,19 +80,7 @@ background:
 ::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#ec4899,#8b5cf6,#06b6d4);border-radius:6px;border:2px solid rgba(10,5,25,.85)}
 ::-webkit-scrollbar-thumb:hover{background:linear-gradient(180deg,#f0abfc,#a78bfa,#22d3ee)}
 html{scrollbar-width:thin;scrollbar-color:#8b5cf6 rgba(10,5,25,.85)}
-/* Chunk 5: Cosmos map */
-#xa-cosmos-map{position:fixed;bottom:16px;right:16px;z-index:50;background:rgba(15,10,30,.9);
- backdrop-filter:blur(8px);border:1px solid rgba(168,85,247,.35);border-radius:12px;
- padding:10px 12px;font-size:11px;color:#d8b4fe;box-shadow:0 4px 20px rgba(147,112,219,.25);max-width:200px}
-#xa-cosmos-map .xa-map-head{display:flex;justify-content:space-between;align-items:center;cursor:pointer;
- font-weight:700;letter-spacing:1.5px;font-size:10px;color:#c084fc;margin-bottom:8px;user-select:none}
-#xa-cosmos-map .xa-map-nodes{display:flex;flex-direction:column;gap:2px}
-#xa-cosmos-map a{display:flex;align-items:center;gap:8px;color:#d8b4fe;text-decoration:none;
- padding:5px 6px;border-radius:6px;transition:background .2s}
-#xa-cosmos-map a:hover{background:rgba(147,112,219,.15)}
-#xa-cosmos-map a.xa-cur{background:rgba(147,112,219,.25);color:#fff;font-weight:600}
-#xa-cosmos-map.xa-collapsed .xa-map-nodes{display:none}
-#xa-cosmos-map.xa-collapsed .xa-map-head{margin-bottom:0}
+/* Chunk 5: Cosmos map (now part of FAB dock, see below) */
 `;
 var st = document.createElement("style");
 st.textContent = css;
@@ -169,20 +186,86 @@ function addSignature(){
 }
 
 /* ---------- 6. Oscar: Studio Supervisor badge ---------- */
-function addOscar(){
-  if (document.getElementById("xa-oscar")) return;
-  try { if (sessionStorage.getItem("xa-oscar-dismissed") === "1") return; } catch (e) {}
-  var b = document.createElement("div");
-  b.id = "xa-oscar";
-  b.title = "Quality control. Nap schedule strictly enforced.";
-  b.innerHTML = '<span class="xa-paw">\u{1F43E}</span><span>Oscar &middot; Studio Supervisor</span>' +
-    '<span id="xa-oscar-x" style="margin-left:6px;cursor:pointer;opacity:.6;font-size:12px;" title="Dismiss">&times;</span>';
-  document.body.appendChild(b);
-  document.getElementById("xa-oscar-x").addEventListener("click", function(ev){
-    ev.stopPropagation();
-    b.remove();
+/* ---------- 6. Sleek FAB dock: Oscar + Cosmos Map ---------- */
+var xaQuips = [
+  "Quality control. Nap schedule strictly enforced.",
+  "Approved this section. Smelled it first.",
+  "Supervising. Do not disturb.",
+  "Treats are the real currency here."
+];
+var xaQuipIdx = 0;
+function dock(){
+  if (document.getElementById("xa-oscar-fab")) return;
+  var path = location.pathname;
+  // Oscar FAB + panel
+  var oscarFab = document.createElement("button");
+  oscarFab.id = "xa-oscar-fab";
+  oscarFab.className = "xa-fab";
+  oscarFab.title = "Oscar \u00B7 Studio Supervisor";
+  oscarFab.setAttribute("aria-label", "Oscar, Studio Supervisor");
+  oscarFab.textContent = "\u{1F43E}";
+  var oscarPop = document.createElement("div");
+  oscarPop.id = "xa-oscar-pop";
+  oscarPop.className = "xa-pop";
+  oscarPop.innerHTML =
+    '<div class="xa-pop-title xa-pop-item">\u{1F43E} OSCAR \u00B7 STUDIO SUPERVISOR</div>' +
+    '<div class="xa-quip xa-pop-item" id="xa-quip">' + xaQuips[0] + '</div>' +
+    '<div class="xa-dismiss xa-pop-item" id="xa-oscar-hide">hide for this visit</div>';
+  // Map FAB + panel
+  var regions = [
+    {name: "The Studio", url: "/", emoji: "\u2728", cur: path === "/" || path === "/index.html"},
+    {name: "TikTok Dimension", url: "https://www.tiktok.com/@xandrathecreative", emoji: "\uD83C\uDFB5", ext: true},
+    {name: "Instagram Dimension", url: "https://www.instagram.com/xandrathecreative", emoji: "\uD83D\uDCF8", ext: true},
+    {name: "The Other Side", url: "/the-other-side", emoji: "\uD83C\uDF0C", cur: path.indexOf("/the-other-side") === 0},
+    {name: "The Cafe", url: "/space-cafe", emoji: "\u2615", cur: path.indexOf("/space-cafe") === 0}
+  ];
+  var mapFab = document.createElement("button");
+  mapFab.id = "xa-map-fab";
+  mapFab.className = "xa-fab";
+  mapFab.title = "Cosmos Map";
+  mapFab.setAttribute("aria-label", "Cosmos Map");
+  mapFab.textContent = "\uD83D\uDDFA";
+  var mapPop = document.createElement("div");
+  mapPop.id = "xa-map-pop";
+  mapPop.className = "xa-pop";
+  mapPop.innerHTML = '<div class="xa-pop-title xa-pop-item">\uD83D\uDDFA COSMOS MAP</div>' +
+    regions.map(function(r){
+      return '<a class="xa-pop-link xa-pop-item' + (r.cur ? " xa-cur" : "") + '" href="' + r.url + '"' +
+        (r.ext ? ' target="_blank" rel="noopener"' : "") + '><span>' + r.emoji + "</span><span>" + r.name + "</span></a>";
+    }).join("");
+  document.body.appendChild(oscarFab);
+  document.body.appendChild(oscarPop);
+  document.body.appendChild(mapFab);
+  document.body.appendChild(mapPop);
+  function closeAll(){
+    oscarPop.classList.remove("open");
+    mapPop.classList.remove("open");
+    oscarFab.classList.remove("active");
+    mapFab.classList.remove("active");
+  }
+  function toggle(pop, fab){
+    var willOpen = !pop.classList.contains("open");
+    closeAll();
+    if (willOpen) {
+      pop.classList.add("open");
+      fab.classList.add("active");
+      if (pop === oscarPop) {
+        xaQuipIdx = (xaQuipIdx + 1) % xaQuips.length;
+        document.getElementById("xa-quip").textContent = xaQuips[xaQuipIdx];
+      }
+    }
+  }
+  oscarFab.addEventListener("click", function(e){ e.stopPropagation(); toggle(oscarPop, oscarFab); });
+  mapFab.addEventListener("click", function(e){ e.stopPropagation(); toggle(mapPop, mapFab); });
+  document.addEventListener("click", function(e){
+    if (!oscarPop.contains(e.target) && !mapPop.contains(e.target)) closeAll();
+  });
+  document.addEventListener("keydown", function(e){ if (e.key === "Escape") closeAll(); });
+  document.getElementById("xa-oscar-hide").addEventListener("click", function(){
+    oscarFab.remove(); oscarPop.remove();
     try { sessionStorage.setItem("xa-oscar-dismissed", "1"); } catch (e) {}
   });
+  try { if (sessionStorage.getItem("xa-oscar-dismissed") === "1") { oscarFab.remove(); } } catch (e) {}
 }
 
 /* ---------- 7. Twinkle the constellation stars ---------- */
@@ -433,40 +516,13 @@ function magneticButtons(){
   });
 }
 
-/* ---------- Chunk 5: Cosmos map ---------- */
-function cosmosMap(){
-  if (document.getElementById("xa-cosmos-map")) return;
-  var path = location.pathname;
-  var regions = [
-    {name: "The Studio", url: "/", emoji: "\u2728", cur: path === "/" || path === "/index.html"},
-    {name: "TikTok Dimension", url: "https://www.tiktok.com/@xandrathecreative", emoji: "\uD83C\uDFB5", ext: true},
-    {name: "Instagram Dimension", url: "https://www.instagram.com/xandrathecreative", emoji: "\uD83D\uDCF8", ext: true},
-    {name: "The Other Side", url: "/the-other-side", emoji: "\uD83C\uDF0C", cur: path.indexOf("/the-other-side") === 0},
-    {name: "The Cafe", url: "/space-cafe", emoji: "\u2615", cur: path.indexOf("/space-cafe") === 0}
-  ];
-  var nodes = regions.map(function(r){
-    return '<a href="' + r.url + '"' +
-      (r.ext ? ' target="_blank" rel="noopener"' : "") +
-      (r.cur ? ' class="xa-cur"' : "") +
-      '><span>' + r.emoji + '</span><span>' + r.name + "</span></a>";
-  }).join("");
-  var div = document.createElement("div");
-  div.id = "xa-cosmos-map";
-  div.className = "xa-collapsed";
-  div.innerHTML = '<div class="xa-map-head"><span>\uD83D\uDDFA COSMOS MAP</span><span id="xa-map-toggle">+</span></div>' +
-    '<div class="xa-map-nodes">' + nodes + "</div>";
-  document.body.appendChild(div);
-  div.querySelector(".xa-map-head").addEventListener("click", function(){
-    var collapsed = div.classList.toggle("xa-collapsed");
-    document.getElementById("xa-map-toggle").textContent = collapsed ? "+" : "\u2212";
-  });
-}
+/* ---------- Chunk 5: Cosmos map (integrated into FAB dock above) ---------- */
 
 function run(){
   voicePass();
   addDividers();
   addSignature();
-  addOscar();
+  dock();
   twinkle();
   dimHovers();
   molEgg();
@@ -474,7 +530,6 @@ function run(){
   scrollEntrances();
   tiltCards();
   magneticButtons();
-  cosmosMap();
 }
 var attempts = 0;
 var timer = setInterval(function(){
